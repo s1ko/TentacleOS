@@ -3,3 +3,4 @@ dependencies:
   espressif/tinyusb: '*'
   espressif/esp_tinyusb: '*'
   joltwallet/littlefs: "^1.14.8"
+  lvgl/lvgl: "^9.4.0"
