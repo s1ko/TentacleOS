@@ -18,8 +18,6 @@ idf_component_register(SRCS
   "icons/icons.c"
   "wifi/wifi_service.c"
   "http_server/http_server_service.c"
-  "virtual_display_client/virtual_display_client.c"
-  "usb_stream/usb_stream.c"
   "dns_server/dns_server.c"
   "bluetooth/bluetooth_service.c"
 
@@ -44,6 +42,8 @@ idf_component_register(SRCS
   "ir/protocol_samsung32.c"
   "ir/protocol_sony.c"
   "ir/ir_burst.c"
+  "lvgl_port/lv_port_indev.c"
+  "lvgl_port/lv_port_disp.c"
 
   INCLUDE_DIRS 
   "font/include"
@@ -51,13 +51,12 @@ idf_component_register(SRCS
   "wifi/include"
   "http_server/include"
   "dns_server/include"
-  "virtual_display_client/include"
-  "usb_stream/include"
   "bluetooth/include"
   "ir/include"
   "storage_api/include"
   "storage_vfs/include"
   "storage_assets/include"
+  "lvgl_port/include"
   
 
   REQUIRES 
@@ -72,6 +71,7 @@ idf_component_register(SRCS
   Drivers 
   esp_http_server
   nvs_flash
+  lvgl
   bt
   littlefs
 )
