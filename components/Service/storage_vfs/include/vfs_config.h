@@ -24,11 +24,7 @@
 extern "C" {
 #endif
 
-/* ============================================================================
- * SELECT YOUR BACKEND (uncomment only ONE line)
- * ============================================================================ */
-
-// #define VFS_USE_SD_CARD
+#define VFS_USE_SD_CARD
 // #define VFS_USE_SPIFFS
 #define VFS_USE_LITTLEFS     // Active backend
 // #define VFS_USE_RAMFS
@@ -88,4 +84,4 @@ extern "C" {
 }
 #endif
 
-#endif // VFS_CONFIG_H
+#endif
