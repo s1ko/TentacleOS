@@ -25,6 +25,7 @@ idf_component_register(SRCS
   "storage_api/storage_init.c"
   "storage_api/storage_read.c"
   "storage_api/storage_write.c"
+  "storage_api/storage_mkdir.c"
   "storage_vfs/vfs_auto.c"
   "storage_vfs/vfs_core.c"
   "storage_vfs/vfs_littlefs.c"
