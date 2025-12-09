@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/**
- * @file vfs_littlefs.c
- * @brief VFS backend for LittleFS (flash)
- */
-
 #include "vfs_core.h"
 #include "vfs_config.h"
 #include "vfs_littlefs.h"
@@ -32,18 +27,11 @@
 
 static const char *TAG = "vfs_littlefs";
 
-// Backend state
 static struct {
     bool mounted;
     size_t total_bytes;
     size_t used_bytes;
 } s_littlefs = {0};
-
-/* ============================================================================
- * BACKEND OPERATIONS IMPLEMENTATION
- * ============================================================================ */
-
-// LittleFS uses standard POSIX file functions provided by ESP-IDF
 
 static vfs_fd_t littlefs_open(const char *path, int flags, int mode)
 {
@@ -180,7 +168,7 @@ static esp_err_t littlefs_statvfs(vfs_statvfs_t *stat)
         stat->total_bytes = total;
         stat->used_bytes = used;
         stat->free_bytes = total - used;
-        stat->block_size = 4096; // LittleFS uses 4 KB blocks
+        stat->block_size = 4096;
         stat->total_blocks = total / 4096;
         stat->free_blocks = (total - used) / 4096;
     }
@@ -193,51 +181,36 @@ static bool littlefs_is_mounted(void)
     return s_littlefs.mounted;
 }
 
-/* ============================================================================
- * BACKEND OPERATIONS TABLE
- * ============================================================================ */
-
 static const vfs_backend_ops_t s_littlefs_ops = {
     .init = NULL,
     .deinit = NULL,
     .is_mounted = littlefs_is_mounted,
-    
     .open = littlefs_open,
     .read = littlefs_read,
     .write = littlefs_write,
     .lseek = littlefs_lseek,
     .close = littlefs_close,
     .fsync = littlefs_fsync,
-    
     .stat = littlefs_stat,
     .fstat = littlefs_fstat,
     .rename = littlefs_rename,
     .unlink = littlefs_unlink,
     .truncate = littlefs_truncate,
-    
     .mkdir = littlefs_mkdir,
     .rmdir = littlefs_rmdir,
     .opendir = littlefs_opendir,
     .readdir = littlefs_readdir,
     .closedir = littlefs_closedir,
-    
     .statvfs = littlefs_statvfs,
 };
-
-/* ============================================================================
- * INITIALIZATION
- * ============================================================================ */
 
 esp_err_t vfs_littlefs_init(void)
 {
     if (s_littlefs.mounted) {
-        ESP_LOGW(TAG, "LittleFS already mounted");
         return ESP_OK;
     }
     
     ESP_LOGI(TAG, "Initializing LittleFS");
-    ESP_LOGI(TAG, "Partition: %s", VFS_PARTITION_LABEL);
-    ESP_LOGI(TAG, "Mount point: %s", VFS_MOUNT_POINT);
     
     esp_vfs_littlefs_conf_t conf = {
         .base_path = VFS_MOUNT_POINT,
@@ -249,21 +222,16 @@ esp_err_t vfs_littlefs_init(void)
     esp_err_t ret = esp_vfs_littlefs_register(&conf);
     
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount LittleFS: %s (0x%x)", esp_err_to_name(ret), ret);
-        
+        ESP_LOGE(TAG, "Mount failed: %s", esp_err_to_name(ret));
         if (ret == ESP_FAIL) {
-            ESP_LOGE(TAG, "Partition not found, check partition table");
+            ESP_LOGE(TAG, "Partition not found");
         }
-        
         return ret;
     }
     
     s_littlefs.mounted = true;
-    
-    // Fetch partition info
     esp_littlefs_info(VFS_PARTITION_LABEL, &s_littlefs.total_bytes, &s_littlefs.used_bytes);
     
-    // Register in VFS core
     vfs_backend_config_t backend_config = {
         .type = VFS_BACKEND_LITTLEFS,
         .mount_point = VFS_MOUNT_POINT,
@@ -273,16 +241,12 @@ esp_err_t vfs_littlefs_init(void)
     
     ret = vfs_register_backend(&backend_config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to register LittleFS backend in VFS core");
+        ESP_LOGE(TAG, "Register failed");
         vfs_littlefs_deinit();
         return ret;
     }
     
-    ESP_LOGI(TAG, "LittleFS mounted");
-    ESP_LOGI(TAG, "Partition: %s", VFS_PARTITION_LABEL);
-    ESP_LOGI(TAG, "Capacity: %u KB", s_littlefs.total_bytes / 1024);
-    ESP_LOGI(TAG, "Used: %u KB", s_littlefs.used_bytes / 1024);
-    ESP_LOGI(TAG, "Free: %u KB", (s_littlefs.total_bytes - s_littlefs.used_bytes) / 1024);
+    ESP_LOGI(TAG, "LittleFS mounted: %u KB", s_littlefs.total_bytes / 1024);
     
     return ESP_OK;
 }
@@ -290,13 +254,9 @@ esp_err_t vfs_littlefs_init(void)
 esp_err_t vfs_littlefs_deinit(void)
 {
     if (!s_littlefs.mounted) {
-        ESP_LOGW(TAG, "LittleFS is not mounted");
         return ESP_ERR_INVALID_STATE;
     }
     
-    ESP_LOGI(TAG, "Unmounting LittleFS");
-    
-    // Unregister from VFS core first
     vfs_unregister_backend(VFS_MOUNT_POINT);
     
     esp_err_t ret = esp_vfs_littlefs_unregister(VFS_PARTITION_LABEL);
@@ -305,9 +265,6 @@ esp_err_t vfs_littlefs_deinit(void)
         s_littlefs.mounted = false;
         s_littlefs.total_bytes = 0;
         s_littlefs.used_bytes = 0;
-        ESP_LOGI(TAG, "LittleFS unmounted");
-    } else {
-        ESP_LOGE(TAG, "Failed to unmount LittleFS: %s", esp_err_to_name(ret));
     }
     
     return ret;
@@ -318,48 +275,27 @@ bool vfs_littlefs_is_mounted(void)
     return s_littlefs.mounted;
 }
 
-/* ============================================================================
- * REGISTRATION HELPERS
- * ============================================================================ */
-
 esp_err_t vfs_register_littlefs_backend(void)
 {
-    ESP_LOGI(TAG, "Registering LittleFS backend");
     return vfs_littlefs_init();
 }
 
 esp_err_t vfs_unregister_littlefs_backend(void)
 {
-    ESP_LOGI(TAG, "Unregistering LittleFS backend");
     return vfs_littlefs_deinit();
 }
-
-/* ============================================================================
- * AUXILIARY FUNCTIONS
- * ============================================================================ */
 
 void vfs_littlefs_print_info(void)
 {
     if (!s_littlefs.mounted) {
-        ESP_LOGW(TAG, "LittleFS is not mounted");
         return;
     }
-    
-    ESP_LOGI(TAG, "LittleFS info:");
-    ESP_LOGI(TAG, "Mount point: %s", VFS_MOUNT_POINT);
-    ESP_LOGI(TAG, "Partition: %s", VFS_PARTITION_LABEL);
     
     size_t total, used;
     if (esp_littlefs_info(VFS_PARTITION_LABEL, &total, &used) == ESP_OK) {
         float percent = total > 0 ? ((float)used / total) * 100.0f : 0.0f;
-        
-        ESP_LOGI(TAG, "Total: %u KB (%.2f MB)", 
-                 total / 1024, (float)total / (1024 * 1024));
-        ESP_LOGI(TAG, "Used: %u KB (%.2f MB)", 
-                 used / 1024, (float)used / (1024 * 1024));
-        ESP_LOGI(TAG, "Free: %u KB (%.2f MB)", 
-                 (total - used) / 1024, (float)(total - used) / (1024 * 1024));
-        ESP_LOGI(TAG, "Usage: %.1f%%", percent);
+        ESP_LOGI(TAG, "LittleFS: %u / %u KB (%.1f%%)", 
+                 used / 1024, total / 1024, percent);
     }
 }
 
@@ -369,29 +305,18 @@ esp_err_t vfs_littlefs_format(void)
         return ESP_ERR_INVALID_STATE;
     }
     
-    ESP_LOGW(TAG, "Formatting LittleFS");
-    
-    // Unmount
     esp_err_t ret = vfs_littlefs_deinit();
     if (ret != ESP_OK) {
         return ret;
     }
     
-    // Format partition
     ret = esp_littlefs_format(VFS_PARTITION_LABEL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to format LittleFS: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Format failed: %s", esp_err_to_name(ret));
         return ret;
     }
     
-    // Remount
-    ret = vfs_littlefs_init();
-    
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "LittleFS formatted successfully");
-    }
-    
-    return ret;
+    return vfs_littlefs_init();
 }
 
-#endif // VFS_USE_LITTLEFS
+#endif
