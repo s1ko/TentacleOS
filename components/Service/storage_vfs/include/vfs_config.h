@@ -24,9 +24,9 @@
 extern "C" {
 #endif
 
-#define VFS_USE_SD_CARD
+#define VFS_USE_SD_CARD // Active backend
 // #define VFS_USE_SPIFFS
-#define VFS_USE_LITTLEFS     // Active backend
+// #define VFS_USE_LITTLEFS
 // #define VFS_USE_RAMFS
 
 /* ============================================================================
