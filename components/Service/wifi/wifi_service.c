@@ -14,6 +14,7 @@
 
 
 #include "wifi_service.h"
+#include "esp_err.h"
 #include "led_control.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
@@ -23,7 +24,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "virtual_display_client.h" // Adicionar este include
+// #include "virtual_display_client.h" // Adicionar este include
 
 static wifi_ap_record_t stored_aps[WIFI_SCAN_LIST_SIZE];
 static uint16_t stored_ap_count = 0;
@@ -99,31 +100,64 @@ void wifi_change_to_hotspot(const char *new_ssid) {
 }
 
 void wifi_init(void) {
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    esp_err_t err;
+
+    // 1. Inicialização da NVS (Necessário para armazenar calibração do Wi-Fi)
+    err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+        err = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
+    ESP_ERROR_CHECK(err);
 
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap(); // Cria a interface AP
-    esp_netif_create_default_wifi_sta(); // Cria a interface STA (importante para o display virtual)
+    // 2. Inicializa a Interface de Rede (Netif)
+    // Se já foi iniciado antes (ex: reiniciando o wifi sem reiniciar o ESP), ignoramos o erro.
+    err = esp_netif_init();
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_ERROR_CHECK(err);
+    }
 
+    // 3. Inicializa o Loop de Eventos Padrão
+    // Mesmo princípio: se já existe, seguimos em frente.
+    err = esp_event_loop_create_default();
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_ERROR_CHECK(err);
+    }
+
+    // Cria as interfaces AP e STA padrão, se elas ainda não existirem.
+    // O driver cuida de vincular a interface correta.
+    esp_netif_create_default_wifi_ap();
+    esp_netif_create_default_wifi_sta();
+
+    // 4. Inicializa o Driver Wi-Fi com configurações padrão
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    err = esp_wifi_init(&cfg);
+    if (err == ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "Driver Wi-Fi já estava inicializado. Ignorando...");
+    } else {
+        ESP_ERROR_CHECK(err);
+    }
 
-    // Registra o handler de eventos do wifi_service
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL));
+    // 5. Registra os Handlers de Eventos
+    // Usamos uma variável auxiliar para não travar com ESP_ERROR_CHECK se já estiver registrado
+    esp_err_t err_reg;
+    
+    // Registra eventos gerais de Wi-Fi (conexão, desconexão, scan)
+    err_reg = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
+    if (err_reg != ESP_OK && err_reg != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "Falha ao registrar WIFI_EVENT: %s", esp_err_to_name(err_reg));
+    }
 
-    // **** NOVO: Registra o handler de eventos do virtual_display_client para os eventos STA ****
-    // ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, virtual_display_wifi_event_handler, NULL, NULL)); 
-    // ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, virtual_display_wifi_event_handler, NULL, NULL)); 
+    // Registra evento de obtenção de IP
+    err_reg = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL);
+    if (err_reg != ESP_OK && err_reg != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "Falha ao registrar IP_EVENT: %s", esp_err_to_name(err_reg));
+    }
 
+    // 6. Configura o Modo de Operação (AP + Station)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
+    // 7. Configurações do Access Point (AP)
     wifi_config_t ap_config = {
         .ap = {
             .ssid = "Darth Maul",
@@ -135,26 +169,19 @@ void wifi_init(void) {
             .beacon_interval = 100,
         },
     };
+    
+    // Aplica configuração
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
 
-    // Configuração do modo STA para o display virtual
-    // wifi_config_t sta_config = {
-    //     .sta = {
-    //         .ssid = WIFI_SSID_VIRTUAL_DISPLAY,     
-    //         .password = WIFI_PASS_VIRTUAL_DISPLAY, 
-    //     },
-    // };
-    // ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &sta_config));
-
+    // 8. Inicia o Wi-Fi
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    // Conecta no modo STA para o display virtual
-    //esp_wifi_connect(); 
+    // 9. Inicializa o Mutex (apenas se não existir)
+    if (wifi_mutex == NULL) {
+        wifi_mutex = xSemaphoreCreateMutex();
+    }
 
-    // NOVO: Inicia a lógica de envio de frames do display virtual
-    //virtual_display_start_frame_sending(); 
-
-    ESP_LOGI(TAG, "Inicialização do Wi-Fi em modo APSTA concluída.");
+    ESP_LOGI(TAG, "Inicialização do Wi-Fi em modo APSTA concluída com sucesso.");
 }
 
 void wifi_service_scan(void) {
@@ -258,7 +285,68 @@ esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password) {
     return ESP_OK;
 }
 
-void wifi_service_init(void) {
-  wifi_mutex = xSemaphoreCreateMutex();
-  ESP_LOGI(TAG, "WIFI service initalized.");
+ void wifi_deinit(void) {
+     ESP_LOGI(TAG, "Iniciando desativação do Wi-Fi...");
+     esp_err_t err;
+
+     // 1. Tenta parar o Wi-Fi
+     err = esp_wifi_stop();
+     if (err == ESP_ERR_WIFI_NOT_INIT) {
+         ESP_LOGW(TAG, "Wi-Fi já estava desativado ou não inicializado. Abortando deinit.");
+         return; // Se não tá init, não tem nada pra limpar
+     } else if (err != ESP_OK) {
+         ESP_LOGE(TAG, "Erro ao parar Wi-Fi: %s", esp_err_to_name(err));
+         // Não retorna, tenta limpar o resto mesmo assim
+     }
+
+     // 2. Desregistrar Event Handlers (Sem ESP_ERROR_CHECK)
+     // Se o handler não estiver registrado, ele retorna erro, mas não queremos reiniciar por isso.
+     err = esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler);
+     if (err != ESP_OK) {
+         ESP_LOGW(TAG, "Aviso: Falha ao desregistrar handler WIFI_EVENT (pode já ter sido removido): %s", esp_err_to_name(err));
+     }
+
+     err = esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler);
+     if (err != ESP_OK) {
+         ESP_LOGW(TAG, "Aviso: Falha ao desregistrar handler IP_EVENT (pode já ter sido removido): %s", esp_err_to_name(err));
+     }
+
+     // 3. Desinicializar Driver
+     err = esp_wifi_deinit();
+     if (err != ESP_OK) {
+         ESP_LOGE(TAG, "Erro ao desinicializar driver Wi-Fi: %s", esp_err_to_name(err));
+     }
+
+     // 4. Limpar Mutex
+     if (wifi_mutex != NULL) {
+         vSemaphoreDelete(wifi_mutex);
+         wifi_mutex = NULL;
+     }
+
+     // Limpar dados estáticos
+     stored_ap_count = 0;
+     memset(stored_aps, 0, sizeof(stored_aps));
+
+     ESP_LOGI(TAG, "Wi-Fi desativado e recursos liberados.");
+ }
+
+void wifi_start(void){
+  esp_err_t err;
+  err = esp_wifi_start();
+  if(err != ESP_OK){
+    ESP_LOGE(TAG, "Error to start wifi: %s", esp_err_to_name(err));
+  }
+}
+
+void wifi_stop(void){
+  esp_err_t err;
+  err = esp_wifi_stop();
+  if(err != ESP_OK){
+    ESP_LOGE(TAG, "Error to stop wifi: %s", esp_err_to_name(err));
+  }
+
+  stored_ap_count = 0;
+  memset(stored_aps, 0, sizeof(stored_aps));
+  ESP_LOGI(TAG, "WiFi stopped and cleaned static data");
+
 }

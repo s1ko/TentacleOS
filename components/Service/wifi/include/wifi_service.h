@@ -25,7 +25,9 @@
 
 // inicializacao
 void wifi_init(void);
-void wifi_service_init(void);
+void wifi_deinit(void);
+void wifi_stop(void);
+void wifi_start(void);
 
 // funçoes de gerenciamento
 void wifi_change_to_hotspot(const char *new_ssid);
