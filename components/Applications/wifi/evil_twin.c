@@ -192,6 +192,6 @@ void evil_twin_start_attack(const char *ssid) {
 
 void evil_twin_stop_attack(void) {
   stop_http_server();
-  wifi_service_init(); // Restaura o modo Wi-Fi padrão
+  // wifi_service_init(); // Restaura o modo Wi-Fi padrão
   ESP_LOGI(TAG_ET, "Lógica do Evil Twin parada.");
 }
