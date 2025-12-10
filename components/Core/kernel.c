@@ -14,6 +14,7 @@
 
 
 #include <stdio.h>
+#include "buttons_gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -55,12 +56,16 @@ void kernel_init(void) {
     led_rgb_init();
     buzzer_boot_sequence();
     bq25896_init();
-   
+  
+    buttons_init();
+
+    wifi_init();
+
     // display and graphical api init
     st7789_init();
     lv_init();
-    lv_port_indev_init();
     lv_port_disp_init();
+    lv_port_indev_init();
 
     ram_monitor();
     
