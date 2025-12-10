@@ -4,6 +4,18 @@
 
 #define BUTTON_PRESSED_LEVEL    0
 
+static button_t buttons[] = {
+    { BTN_UP,    true, false },
+    { BTN_DOWN,  true, false },
+    { BTN_LEFT,  true, false },
+    { BTN_RIGHT, true, false },
+    { BTN_OK,    true, false },
+    { BTN_BACK,  true, false },
+};
+
+#define NUM_BUTTONS (sizeof(buttons)/sizeof(buttons[0]))
+
+
 
 static bool get_raw_level(uint32_t gpio)
 {

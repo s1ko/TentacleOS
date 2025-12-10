@@ -10,16 +10,6 @@ typedef struct {
     bool     pressed_flag;   
 } button_t;
 
-static button_t buttons[] = {
-    { BTN_UP,    true, false },
-    { BTN_DOWN,  true, false },
-    { BTN_LEFT,  true, false },
-    { BTN_RIGHT, true, false },
-    { BTN_OK,    true, false },
-    { BTN_BACK,  true, false },
-};
-
-#define NUM_BUTTONS (sizeof(buttons)/sizeof(buttons[0]))
 
 
 void buttons_init(void);
