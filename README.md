@@ -32,7 +32,9 @@ Unlike basic examples with a single `main.c`, this project uses a modular struct
 This division facilitates scalability, code reuse, and firmware organization.
 
 📷 See the general project architecture:
-[![Firmware Architecture](pics/architecture)](pics/architecture.png)
+<p align="center">
+  <img src="pics/architecture.png" alt="Arquitetura do Firmware" width="40%"/>
+</p>
 
 ---
 
