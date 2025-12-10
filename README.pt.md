@@ -32,7 +32,9 @@ Diferente de exemplos básicos com um único `main.c`, este projeto utiliza uma 
 Essa divisão facilita a escalabilidade, reutilização de código e organização do firmware.
 
 📷 Veja a arquitetura geral do projeto:  
-[![Firmware Architecture](pics/architecture)](pics/architecture.png)
+<p align="center">
+  <img src="pics/architecture.png" alt="Arquitetura do Firmware" width="40%"/>
+</p>
 
 --- 
 
