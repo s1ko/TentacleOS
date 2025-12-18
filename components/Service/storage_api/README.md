@@ -14,7 +14,6 @@ The **Storage API** provides a unified, backend-agnostic interface for file syst
 ## Initialization
 
 Before performing any operations, the storage system must be initialized.
-
 ```c
 #include "storage_init.h"
 
@@ -32,6 +31,37 @@ if (storage_is_mounted()) {
 // Deinitialize when done (rarely needed for main application)
 storage_deinit();
 ```
+
+### Default Directory Structure
+
+The storage system automatically creates a standard directory tree on initialization:
+```
+/sdcard/  (or configured mount point)
+├── config/     - Configuration files
+├── data/       - Application data
+├── logs/       - Log files
+├── cache/      - Temporary cache
+├── temp/       - Temporary files
+├── backup/     - Backup files
+├── certs/      - SSL/TLS certificates
+└── scripts/    - Script files
+```
+
+These directories are defined in `storage_dirs.h` and can be accessed via macros:
+```c
+#include "storage_dirs.h"
+
+// Write to config directory
+storage_write_string(STORAGE_DIR_CONFIG "/settings.json", json_data);
+
+// Append to logs
+storage_append_formatted(STORAGE_DIR_LOGS "/system.log", "[%lu] Event\n", timestamp);
+
+// Save backup
+storage_file_copy("/data/important.dat", STORAGE_DIR_BACKUP "/important.dat");
+```
+
+**Note**: Directory creation is non-critical. If any directory fails to create, initialization continues successfully, and you can create directories manually later as needed.
 
 ---
 
