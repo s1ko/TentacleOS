@@ -4,6 +4,9 @@
 #include "lv_port_indev.h"
 #include "header_ui.h"
 #include "footer_ui.h"
+#include "esp_log.h"
+
+static const char *TAG = "UI_MENU";
 
 static lv_obj_t * menu_screen = NULL;
 static lv_obj_t * menu_indicator_label = NULL;
@@ -45,24 +48,48 @@ static void menu_update_ui(void)
 
 static void menu_event_cb(lv_event_t * e)
 {
-  if (lv_event_get_code(e) != LV_EVENT_KEY)
-    return;
+    if (lv_event_get_code(e) != LV_EVENT_KEY)
+        return;
 
-  uint32_t key = lv_event_get_key(e);
+    uint32_t key = lv_event_get_key(e);
 
-  if (key == LV_KEY_RIGHT) {
-    menu_index = (menu_index + 1) % MENU_ITEM_COUNT;
-    menu_update_ui();
-  }
-  else if (key == LV_KEY_LEFT) {
-    menu_index = (menu_index == 0)
-      ? MENU_ITEM_COUNT - 1
-      : menu_index - 1;
-    menu_update_ui();
-  }
-  else if (key == LV_KEY_ESC) {
-    ui_switch_screen(SCREEN_HOME);
-  }
+    // Navegação Direita
+    if (key == LV_KEY_RIGHT) {
+        menu_index = (menu_index + 1) % MENU_ITEM_COUNT;
+        menu_update_ui();
+    }
+    // Navegação Esquerda
+    else if (key == LV_KEY_LEFT) {
+        menu_index = (menu_index == 0)
+                     ? MENU_ITEM_COUNT - 1
+                     : menu_index - 1;
+        menu_update_ui();
+    }
+    // Voltar (ESC)
+    else if (key == LV_KEY_ESC) {
+        ui_switch_screen(SCREEN_HOME);
+    }
+    // Entrar no Menu (ENTER)
+    else if (key == LV_KEY_ENTER) {
+        ESP_LOGI(TAG, "Selecionado: %s (Index: %d)", menu_items[menu_index], menu_index);
+        
+        switch (menu_index) {
+            case 0: // BLE
+                ui_switch_screen(SCREEN_BLE_MENU);
+                break;
+            case 1: // WIFI
+                ui_switch_screen(SCREEN_WIFI_MENU);
+                break;
+            case 2: // IR
+                // ui_switch_screen(SCREEN_IR_MENU); // Implementar depois
+                break;
+            case 3: // CONFIGS
+                // ui_switch_screen(SCREEN_CONFIGS); // Implementar depois
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 void ui_menu_open(void)
@@ -78,6 +105,7 @@ void ui_menu_open(void)
 
     header_ui_create(menu_screen);
 
+    // --- Dots Container ---
     lv_obj_t * menu_dots_container = lv_obj_create(menu_screen);
     lv_obj_set_size(menu_dots_container, LV_SIZE_CONTENT, 8);
     lv_obj_align(menu_dots_container, LV_ALIGN_TOP_MID, 0, 42);
@@ -101,6 +129,7 @@ void ui_menu_open(void)
         lv_obj_set_style_border_width(menu_dots[i], 0, 0);
     }
 
+    // --- Assets Visuais (Frames) ---
     lv_obj_t * img_left4 = lv_img_create(menu_screen);
     lv_img_set_src(img_left4, "A:/frames/nfc_frame_1.png");
     lv_img_set_zoom(img_left4, 460);
@@ -171,6 +200,7 @@ void ui_menu_open(void)
     lv_obj_align(img_center, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_opa(img_center, LV_OPA_COVER, 0);
 
+    // --- Label ---
     menu_indicator_label = lv_label_create(menu_screen);
     lv_obj_align(menu_indicator_label, LV_ALIGN_BOTTOM_MID, 0, -42);
     lv_obj_set_style_text_color(menu_indicator_label, lv_color_white(), 0);
