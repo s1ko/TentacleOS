@@ -1,194 +1,164 @@
 #include "wifi_ui.h"
-#include "misc/lv_palette.h"
+#include "font/lv_symbol_def.h"
+#include "header_ui.h"
+#include "footer_ui.h"
+
+#include "core/lv_group.h"
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "esp_log.h"
 
-static const char *TAG = "UI_WIFI";
+// Definições de Estilo baseadas no seu sub_menu
+#define BG_COLOR            lv_color_black()
+#define COLOR_BORDER        0x834EC6
+#define COLOR_GRADIENT_TOP  0x000000
+#define COLOR_GRADIENT_BOT  0x2E0157
 
-// --- CONFIGURAÇÕES VISUAIS (Mesmas do Menu Principal) ---
-#define THEME_COLOR lv_palette_main(LV_PALETTE_DEEP_PURPLE)
-#define BG_COLOR    lv_color_black()
+static lv_obj_t * screen_wifi_menu = NULL;
+static lv_style_t style_menu;
+static lv_style_t style_btn;
+static bool styles_initialized = false;
 
-// --- ESTRUTURA DE DADOS ---
-// Adaptada do seu struct para facilitar o loop de criação
-typedef struct {
-    const char * label;
-    const char * symbol; // Substituindo seu 'icon' por Symbol por enquanto
-    int screen_id_target; // Qual tela abrir (ou ID da ação)
-} wifi_menu_item_t;
+static void wifi_menu_event_cb(lv_event_t * e);
 
-// Enum para identificar as ações internamente
-typedef enum {
-    WIFI_OP_SCAN = 0,
-    WIFI_OP_ANALYZER,
-    WIFI_OP_TRAFFIC,
-    WIFI_OP_ATTACK,
-    WIFI_OP_PORT_SCAN,
-    WIFI_OP_EVIL_TWIN
-} wifi_op_t;
+static const char *TAG = "UI_WIFI_MENU";
 
-// Sua lista de opções mapeada para o LVGL
-static const wifi_menu_item_t wifi_items[] = {
-    { "Scan Redes",       LV_SYMBOL_WIFI,      WIFI_OP_SCAN },
-    { "Analisar Redes",   LV_SYMBOL_LIST,      WIFI_OP_ANALYZER },
-    { "Analisar Trafego", LV_SYMBOL_SHUFFLE,   WIFI_OP_TRAFFIC }, // Shuffle parece gráfico
-    { "Port Scan",        LV_SYMBOL_WIFI,      WIFI_OP_PORT_SCAN},
-    { "Atacar Alvo",      LV_SYMBOL_WARNING,   WIFI_OP_ATTACK },  // Warning para perigo
-    { "Evil Twin",        LV_SYMBOL_REFRESH,   WIFI_OP_EVIL_TWIN }, // Refresh para 'clone'
-};
-
-static lv_obj_t * screen_wifi = NULL;
-
-// --- CALLBACK DE NAVEGAÇÃO ---
-static void wifi_event_cb(lv_event_t * e)
+// Inicialização de estilos (IDÊNTICO ao sub_menu)
+static void init_styles(void)
 {
+    if(styles_initialized) return;
+    
+    lv_style_init(&style_menu);
+    lv_style_set_bg_opa(&style_menu, LV_OPA_TRANSP);
+    lv_style_set_border_width(&style_menu, 2);
+    lv_style_set_border_color(&style_menu, lv_color_hex(COLOR_BORDER));
+    lv_style_set_radius(&style_menu, 6);
+    lv_style_set_pad_all(&style_menu, 10);
+    lv_style_set_pad_row(&style_menu, 10);
+    
+    lv_style_init(&style_btn);
+    lv_style_set_bg_color(&style_btn, lv_color_hex(COLOR_GRADIENT_BOT));
+    lv_style_set_bg_grad_color(&style_btn, lv_color_hex(COLOR_GRADIENT_TOP));
+    lv_style_set_bg_grad_dir(&style_btn, LV_GRAD_DIR_VER);
+    lv_style_set_border_width(&style_btn, 2);
+    lv_style_set_border_color(&style_btn, lv_color_hex(COLOR_BORDER));
+    lv_style_set_radius(&style_btn, 6);
+    
+    styles_initialized = true;
+}
+
+// Callback para gerenciar o ícone de seleção ao focar/desfocar
+static void menu_item_event_cb(lv_event_t * e)
+{
+    lv_obj_t * img_sel = lv_event_get_user_data(e);
     lv_event_code_t code = lv_event_get_code(e);
-    lv_obj_t * btn_clicked = lv_event_get_target(e);
 
-    if (code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-
-        // VOLTAR -> Vai para o MENU PRINCIPAL
-        if (key == LV_KEY_ESC || key == LV_KEY_LEFT) {
-            ESP_LOGI(TAG, "Voltando para Menu Principal");
-            ui_switch_screen(SCREEN_MENU);
-        }
-        
-        // ENTRAR -> Executa a ação
-        else if (key == LV_KEY_RIGHT || key == LV_KEY_ENTER) {
-            
-            intptr_t op_id = (intptr_t)lv_obj_get_user_data(btn_clicked);
-            ESP_LOGI(TAG, "Opção WiFi Selecionada: %d", (int)op_id);
-
-            // AQUI VOCÊ CHAMA SUAS FUNÇÕES REAIS OU ABRE AS TELAS
-            switch (op_id) {
-                case WIFI_OP_SCAN:
-                    // wifi_action_scan(); // Sua função backend
-                    ui_switch_screen(SCREEN_WIFI_SCAN); // Abre a tela de scan
-                    break;
-
-                case WIFI_OP_ANALYZER:
-                    // wifi_action_analyze();
-                    // ui_switch_screen(SCREEN_WIFI_ANALYZER);
-                    break;
-
-                case WIFI_OP_TRAFFIC:
-                    // show_traffic_analyzer();
-                    break;
-
-                case WIFI_OP_ATTACK:
-                    // wifi_action_attack();
-                    // ui_switch_screen(SCREEN_WIFI_ATTACK);
-                    break;
-
-                case WIFI_OP_EVIL_TWIN:
-                     // wifi_action_evil_twin();
-                     break;
-
-                default:
-                    break;
-            }
-        }
+    if(code == LV_EVENT_FOCUSED) {
+        lv_obj_clear_flag(img_sel, LV_OBJ_FLAG_HIDDEN);
+    }
+    else if(code == LV_EVENT_DEFOCUSED) {
+        lv_obj_add_flag(img_sel, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
-// --- HELPER PARA CRIAR BOTÃO (Reutilizado do Menu Principal) ---
-static void create_wifi_item(lv_obj_t * parent, const char * text, const char * symbol, int id)
+// Função de construção do menu de Wi-Fi
+static void create_wifi_menu(lv_obj_t * parent)
 {
-    lv_obj_t * btn = lv_btn_create(parent);
-    lv_obj_set_width(btn, LV_PCT(100));
-    lv_obj_set_height(btn, 45);
+    init_styles();
     
-    // Estilos
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x151515), 0); // Um pouco mais escuro que o menu principal
-    lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x333333), 0);
-    lv_obj_set_style_radius(btn, 8, 0);
+    lv_coord_t menu_h = 240 - 24 - 20; // Altura ajustada para header/footer
+
+    lv_obj_t * menu = lv_obj_create(parent);
+    lv_obj_set_size(menu, 240, menu_h);
+    lv_obj_align(menu, LV_ALIGN_CENTER, 0, 2);
+    lv_obj_add_style(menu, &style_menu, 0);
+    lv_obj_set_scroll_dir(menu, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(menu, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(menu, LV_FLEX_FLOW_COLUMN);
+
+    // Ícones do sistema HighBoy
+    static const void * wifi_icon = LV_SYMBOL_WIFI;
+    static const void * select_icon = "A:/UI/MENU_SELECT.png";
+
+    // Itens específicos do Menu Wi-Fi
+    const char * options[] = {"Scan Networks", "Deauth Packets","Evil-Twin", "Port Scan"};
     
-    // Estilo Focado
-    lv_obj_set_style_border_color(btn, THEME_COLOR, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_border_width(btn, 2, LV_STATE_FOCUS_KEY);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x303030), LV_STATE_FOCUS_KEY);
+    for(int i = 0; i < 4; i++) {
+        lv_obj_t * btn = lv_btn_create(menu);
+        lv_obj_set_size(btn, lv_pct(100), 40);
+        lv_obj_add_style(btn, &style_btn, 0);
+        lv_obj_set_style_anim_time(btn, 0, 0); // Navegação instantânea
 
-    // Layout
-    lv_obj_set_flex_flow(btn, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(btn, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_all(btn, 10, 0);
-    lv_obj_set_style_pad_gap(btn, 15, 0);
+        // Ícone à esquerda
+        lv_obj_t * img_left = lv_img_create(btn);
+        lv_img_set_src(img_left, wifi_icon);
+        lv_obj_align(img_left, LV_ALIGN_LEFT_MID, 8, 0);
+        lv_obj_set_style_img_recolor_opa(img_left, LV_OPA_0, 0);
 
-    // Ícone
-    lv_obj_t * lbl_icon = lv_label_create(btn);
-    lv_label_set_text(lbl_icon, symbol);
-    lv_obj_set_style_text_font(lbl_icon, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lbl_icon, lv_color_white(), 0);
+        // Texto da opção
+        lv_obj_t * lbl = lv_label_create(btn);
+        lv_label_set_text_static(lbl, options[i]);
+        lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+        lv_obj_center(lbl);
 
-    // Texto
-    lv_obj_t * lbl_text = lv_label_create(btn);
-    lv_label_set_text(lbl_text, text);
-    lv_obj_set_style_text_font(lbl_text, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(lbl_text, THEME_COLOR, 0);
+        // Ícone de seleção à direita (escondido por padrão)
+        lv_obj_t * img_sel = lv_img_create(btn);
+        lv_img_set_src(img_sel, select_icon);
+        lv_obj_align(img_sel, LV_ALIGN_RIGHT_MID, -8, 0);
+        lv_obj_add_flag(img_sel, LV_OBJ_FLAG_HIDDEN);
 
-    // Dados e Eventos
-    lv_obj_set_user_data(btn, (void*)(intptr_t)id);
-    lv_obj_add_event_cb(btn, wifi_event_cb, LV_EVENT_KEY, NULL);
+        // Registro de eventos de foco
+        lv_obj_add_event_cb(btn, menu_item_event_cb, LV_EVENT_FOCUSED, img_sel);
+        lv_obj_add_event_cb(btn, menu_item_event_cb, LV_EVENT_DEFOCUSED, img_sel);
 
-    // Adiciona ao grupo para navegação funcionar
-    if (main_group) {
-        lv_group_add_obj(main_group, btn);
+        lv_obj_add_event_cb(btn, wifi_menu_event_cb, LV_EVENT_KEY, NULL);    
+
+        // Integração com o grupo de entrada (Input Manager)
+        if(main_group) {
+            lv_group_add_obj(main_group, btn);
+        }
     }
 }
 
-// --- FUNÇÃO PÚBLICA ---
-void ui_wifi_menu(void)
+// Callback de navegação (Voltar para o Menu Principal)
+static void wifi_menu_event_cb(lv_event_t * e)
 {
-    // 1. Limpa o Grupo
-    if (main_group) {
-        lv_group_remove_all_objs(main_group);
-    }
 
-    if (screen_wifi) {
-        lv_obj_del(screen_wifi);
-        screen_wifi = NULL;
-    }
+  if (lv_event_get_code(e) != LV_EVENT_KEY)
+    return;
+  uint32_t key = lv_event_get_key(e); // Captura QUAL tecla foi pressionada
 
-    // 2. Cria Tela
-    screen_wifi = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_wifi, BG_COLOR, 0);
-    if(main_group) lv_group_remove_obj(screen_wifi); // Remove tela do foco
-
-    // 3. Título do Menu (Header Simples)
-    lv_obj_t * title = lv_label_create(screen_wifi);
-    lv_label_set_text(title, "Wi-Fi Attacks");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 10);
-
-    // 4. Container da Lista
-    lv_obj_t * list_cont = lv_obj_create(screen_wifi);
-    lv_obj_set_size(list_cont, LV_PCT(100), 200); // Altura fixa ou resto da tela
-    lv_obj_align(list_cont, LV_ALIGN_TOP_MID, 0, 35); // Abaixo do título
-    lv_obj_set_style_bg_opa(list_cont, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(list_cont, 0, 0);
-    lv_obj_set_style_pad_all(list_cont, 10, 0);
-    lv_obj_set_scrollbar_mode(list_cont, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_flex_flow(list_cont, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_gap(list_cont, 8, 0);
-    
-    if(main_group) lv_group_remove_obj(list_cont);
-
-    // 5. Gera os botões via Loop (Baseado no seu array)
-    int num_items = sizeof(wifi_items) / sizeof(wifi_items[0]);
-    
-    for(int i = 0; i < num_items; i++) {
-        create_wifi_item(list_cont, wifi_items[i].label, wifi_items[i].symbol, wifi_items[i].screen_id_target);
-    }
-
-    // 6. Foca no primeiro item
-    if (main_group && lv_obj_get_child_cnt(list_cont) > 0) {
-        lv_obj_t * first_btn = lv_obj_get_child(list_cont, 0);
-        lv_group_focus_obj(first_btn);
-    }
-
-    lv_screen_load(screen_wifi);
+  // Agora a comparação é entre tipos compatíveis
+  if(key == LV_KEY_ESC) {
+    ESP_LOGI(TAG, "Returning to Main Menu");
+    ui_switch_screen(SCREEN_MENU);
+  }
 }
+
+// Função pública para abrir a tela
+void ui_wifi_menu_open(void)
+{
+    // Limpeza de segurança
+    if(screen_wifi_menu) {
+        lv_obj_del(screen_wifi_menu);
+        screen_wifi_menu = NULL;
+    }
+
+    screen_wifi_menu = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen_wifi_menu, BG_COLOR, 0);
+    lv_obj_remove_flag(screen_wifi_menu, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Criação dos componentes de Header e Footer
+    header_ui_create(screen_wifi_menu);
+    footer_ui_create(screen_wifi_menu);
+    
+    // Criação do conteúdo central
+    create_wifi_menu(screen_wifi_menu);
+
+    // Eventos de navegação na tela base
+    lv_obj_add_event_cb(screen_wifi_menu, wifi_menu_event_cb, LV_EVENT_KEY, NULL);
+
+    // Carregar tela
+    lv_screen_load(screen_wifi_menu);
+}
+
