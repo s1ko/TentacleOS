@@ -61,18 +61,19 @@ idf_component_register(SRCS
   
 
   REQUIRES 
-  sdmmc
-  driver  
-  vfs
-  fatfs
-  esp_timer
-  esp_wifi
-  esp_common
-  esp_netif
-  Drivers 
-  esp_http_server
-  nvs_flash
-  lvgl
-  bt
-  littlefs
+    sdmmc
+    driver  
+    vfs
+    fatfs
+    esp_timer
+    esp_wifi
+    esp_common
+    esp_netif
+    Drivers 
+    esp_http_server
+    nvs_flash
+    lvgl
+    bt
+    littlefs
+    cjson
 )
