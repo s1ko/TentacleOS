@@ -23,19 +23,22 @@
 
 #define WIFI_SCAN_LIST_SIZE 20
 
-// inicializacao
+// initialization
 void wifi_init(void);
 void wifi_deinit(void);
 void wifi_stop(void);
 void wifi_start(void);
 
-// funçoes de gerenciamento
+// management functions
 void wifi_change_to_hotspot(const char *new_ssid);
 esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password);
 
-// funçoes de scan e storage
+// functions to scan and storage
 void wifi_service_scan(void);
 uint16_t wifi_service_get_ap_count(void);
 wifi_ap_record_t* wifi_service_get_ap_record(uint16_t index);
+
+// functions to load and save configs 
+esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t max_conn);
 
 #endif // WIFI_SERVICE_H

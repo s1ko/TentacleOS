@@ -21,14 +21,22 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
+#include <stdint.h>
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "storage_write.h"
+#include "storage_read.h"
+#include "storage_file.h"
+#include "cJSON.h"
 // #include "virtual_display_client.h" // Adicionar este include
+
+#define WIFI_AP_CONFIG_PATH "/assets/config/wifi/wifi_ap.json" 
 
 static wifi_ap_record_t stored_aps[WIFI_SCAN_LIST_SIZE];
 static uint16_t stored_ap_count = 0;
 static SemaphoreHandle_t wifi_mutex = NULL;
+static void wifi_load_ap_config(char* ssid, char* passwd, uint8_t* max_conn);
 
 static const char *TAG = "wifi_service";
 
@@ -39,7 +47,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         led_blink_green();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
         wifi_event_ap_stadisconnected_t *event = (wifi_event_ap_stadisconnected_t *)event_data;
-        ESP_LOGI(TAG, "Estação desconectada do AP, MAC: " MACSTR, MAC2STR(event->mac));
         led_blink_red();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_AP_STAIPASSIGNED) {
         ESP_LOGI(TAG, "IP atribuído a estação conectada ao AP");
@@ -100,9 +107,8 @@ void wifi_change_to_hotspot(const char *new_ssid) {
 }
 
 void wifi_init(void) {
-    esp_err_t err;
+  esp_err_t err;
 
-    // 1. Inicialização da NVS (Necessário para armazenar calibração do Wi-Fi)
     err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -110,78 +116,65 @@ void wifi_init(void) {
     }
     ESP_ERROR_CHECK(err);
 
-    // 2. Inicializa a Interface de Rede (Netif)
-    // Se já foi iniciado antes (ex: reiniciando o wifi sem reiniciar o ESP), ignoramos o erro.
     err = esp_netif_init();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_ERROR_CHECK(err);
     }
 
-    // 3. Inicializa o Loop de Eventos Padrão
-    // Mesmo princípio: se já existe, seguimos em frente.
     err = esp_event_loop_create_default();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_ERROR_CHECK(err);
     }
 
-    // Cria as interfaces AP e STA padrão, se elas ainda não existirem.
-    // O driver cuida de vincular a interface correta.
     esp_netif_create_default_wifi_ap();
     esp_netif_create_default_wifi_sta();
 
-    // 4. Inicializa o Driver Wi-Fi com configurações padrão
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     err = esp_wifi_init(&cfg);
     if (err == ESP_ERR_INVALID_STATE) {
-        ESP_LOGW(TAG, "Driver Wi-Fi já estava inicializado. Ignorando...");
+        ESP_LOGW(TAG, "Driver Wi-Fi já estava inicializado.");
     } else {
         ESP_ERROR_CHECK(err);
     }
 
-    // 5. Registra os Handlers de Eventos
-    // Usamos uma variável auxiliar para não travar com ESP_ERROR_CHECK se já estiver registrado
-    esp_err_t err_reg;
-    
-    // Registra eventos gerais de Wi-Fi (conexão, desconexão, scan)
-    err_reg = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
-    if (err_reg != ESP_OK && err_reg != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "Falha ao registrar WIFI_EVENT: %s", esp_err_to_name(err_reg));
-    }
+    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL);
 
-    // Registra evento de obtenção de IP
-    err_reg = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL);
-    if (err_reg != ESP_OK && err_reg != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "Falha ao registrar IP_EVENT: %s", esp_err_to_name(err_reg));
-    }
-
-    // 6. Configura o Modo de Operação (AP + Station)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
-    // 7. Configurações do Access Point (AP)
+    char target_ssid[32] = "Darth Maul";
+    char target_password[64] = "MyPassword123";
+    uint8_t target_max_conn = 4;  
+
+    wifi_load_ap_config(target_ssid, target_password, &target_max_conn);
+
     wifi_config_t ap_config = {
         .ap = {
-            .ssid = "Darth Maul",
-            .password = "MyPassword123",
-            .ssid_len = strlen("Darth Maul"),
             .channel = 1,
-            .authmode = WIFI_AUTH_WPA_WPA2_PSK,
-            .max_connection = 4,
+            .max_connection = target_max_conn,
             .beacon_interval = 100,
         },
     };
-    
-    // Aplica configuração
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
 
-    // 8. Inicia o Wi-Fi
+    strncpy((char *)ap_config.ap.ssid, target_ssid, sizeof(ap_config.ap.ssid));
+    ap_config.ap.ssid_len = strlen(target_ssid);
+    strncpy((char *)ap_config.ap.password, target_password, sizeof(ap_config.ap.password));
+
+    if (strlen(target_password) == 0) {
+        ap_config.ap.authmode = WIFI_AUTH_OPEN;
+    } else {
+        ap_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    // 9. Inicializa o Mutex (apenas se não existir)
     if (wifi_mutex == NULL) {
         wifi_mutex = xSemaphoreCreateMutex();
     }
 
-    ESP_LOGI(TAG, "Inicialização do Wi-Fi em modo APSTA concluída com sucesso.");
+    ESP_LOGI(TAG, "Wi-Fi AP iniciado com SSID: %s", target_ssid);
 }
 
 void wifi_service_scan(void) {
@@ -349,4 +342,78 @@ void wifi_stop(void){
   memset(stored_aps, 0, sizeof(stored_aps));
   ESP_LOGI(TAG, "WiFi stopped and cleaned static data");
 
+}
+
+static void wifi_load_ap_config(char* ssid, char* passwd, uint8_t* max_conn){
+  if (!storage_file_exists(WIFI_AP_CONFIG_PATH)) {
+    ESP_LOGW(TAG, "Arquivo de config não encontrado. Usando padrões.");
+    return;
+  }
+
+  char *buffer = malloc(512);
+  if (buffer == NULL) return;
+
+  if (storage_read_string(WIFI_AP_CONFIG_PATH, buffer, 512) == ESP_OK) {
+    cJSON *root = cJSON_Parse(buffer);
+    if (root) {
+      cJSON *j_ssid = cJSON_GetObjectItem(root, "ssid");
+      cJSON *j_pass = cJSON_GetObjectItem(root, "password");
+      cJSON *j_conn = cJSON_GetObjectItem(root, "max_conn");
+
+      if (cJSON_IsString(j_ssid) && (strlen(j_ssid->valuestring) > 0)) {
+        strncpy(ssid, j_ssid->valuestring, 31);
+        ssid[31] = '\0';
+      }
+      if (cJSON_IsString(j_pass)) {
+        strncpy(passwd, j_pass->valuestring, 63);
+        passwd[63] = '\0';
+      }
+      if (cJSON_IsNumber(j_conn)){
+        *max_conn = (uint8_t)j_conn->valueint;
+      }
+
+      cJSON_Delete(root);
+      ESP_LOGI(TAG, "Configurações carregadas do storage com sucesso.");
+    }
+  }
+  free(buffer);
+}
+
+esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t max_conn) {
+    if (ssid == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 1. Cria o objeto JSON
+    cJSON *root = cJSON_CreateObject();
+    if (root == NULL) {
+        ESP_LOGE(TAG, "Falha ao alocar memória para o JSON");
+        return ESP_ERR_NO_MEM;
+    }
+
+    cJSON_AddStringToObject(root, "ssid", ssid);
+    cJSON_AddStringToObject(root, "password", (password != NULL) ? password : "");
+    cJSON_AddNumberToObject(root, "max_conn", max_conn);
+
+    // 2. Converte o objeto JSON para String (sem formatação para economizar espaço)
+    char *json_string = cJSON_PrintUnformatted(root);
+    if (json_string == NULL) {
+        cJSON_Delete(root);
+        return ESP_ERR_NO_MEM;
+    }
+
+    // 3. Grava no storage usando sua API (ela cuidará de criar os diretórios se não existirem)
+    esp_err_t err = storage_write_string(WIFI_AP_CONFIG_PATH, json_string);
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Configuração salva com sucesso em: %s", WIFI_AP_CONFIG_PATH);
+    } else {
+        ESP_LOGE(TAG, "Erro ao gravar arquivo de configuração: %s", esp_err_to_name(err));
+    }
+
+    // 4. Limpa a memória
+    free(json_string);
+    cJSON_Delete(root);
+
+    return err;
 }
