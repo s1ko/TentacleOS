@@ -32,7 +32,6 @@ static SemaphoreHandle_t xGuiSemaphore = NULL;
 static void ui_task(void *pvParameter);
 static void lv_tick_task(void *arg);
 static void clear_current_screen(void);
-static bool is_wifi_screen(screen_id_t screen);
 
 screen_id_t current_screen_id = SCREEN_NONE;
 
@@ -93,21 +92,6 @@ static void clear_current_screen(void){
 void ui_switch_screen(screen_id_t new_screen) {
   if (ui_acquire()) {
 
-    bool old_is_wifi = is_wifi_screen(current_screen_id);
-    bool new_is_wifi = is_wifi_screen(new_screen);
-
-    // 1. Entrando no modo Wi-Fi (Vindo de fora)
-    if (!old_is_wifi && new_is_wifi) {
-        ESP_LOGI(TAG, "Entrando no módulo Wi-Fi -> Ligando Rádio");
-        wifi_start(); 
-    }
-
-    // 2. Saindo do modo Wi-Fi (Indo para fora)
-    else if (old_is_wifi && !new_is_wifi) {
-        ESP_LOGI(TAG, "Saindo do módulo Wi-Fi -> Desligando Rádio");
-        wifi_stop();
-    }
-
     clear_current_screen();
 
     switch (new_screen) {
@@ -120,7 +104,7 @@ void ui_switch_screen(screen_id_t new_screen) {
         break;
 
       case SCREEN_WIFI_MENU:
-        ui_wifi_menu();
+        ui_wifi_menu_open();
         break;
       
       case SCREEN_WIFI_SCAN:
@@ -161,14 +145,3 @@ void ui_release(void)
     }
 }
 
-static bool is_wifi_screen(screen_id_t screen) {
-    switch (screen) {
-        case SCREEN_WIFI_MENU:
-        case SCREEN_WIFI_SCAN:
-        // case SCREEN_WIFI_ATTACK: // (Futuro)
-        // case SCREEN_WIFI_EVIL_TWIN: // (Futuro)
-            return true;
-        default:
-            return false;
-    }
-}
