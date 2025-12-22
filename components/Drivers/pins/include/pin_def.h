@@ -21,6 +21,11 @@
 #define SPI_SCLK_PIN    12
 #define SPI_MISO_PIN    13
 
+// extra gpios
+#define GPIO_CS_PIN     3
+#define GPIO_SDA_PIN    12
+#define GPIO_SCL_PIN    9
+
 // chip select
 #define SD_CARD_CS_PIN  14
 #define ST7789_CS_PIN   48
