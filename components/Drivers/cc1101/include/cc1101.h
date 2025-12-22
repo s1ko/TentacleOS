@@ -106,8 +106,6 @@
 #define CC1101_TXFIFO       0x3F      // Acesso à FIFO de Transmissão
 #define CC1101_RXFIFO       0x3F      // Acesso à FIFO de Recepção
 
-#define SPECTRUM_SAMPLES    80
-extern float spectrum_data[SPECTRUM_SAMPLES];
 
 void cc1101_init(void);
 void cc1101_set_frequency(uint32_t freq_hz);
