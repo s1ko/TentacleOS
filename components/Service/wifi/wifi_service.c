@@ -26,12 +26,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "storage_write.h"
-#include "storage_read.h"
-#include "storage_impl.h"
+#include "storage_assets.h"
 #include "cJSON.h"
 // #include "virtual_display_client.h" // Adicionar este include
 
-#define WIFI_AP_CONFIG_PATH "/assets/config/wifi/wifi_ap.json" 
+#define WIFI_AP_CONFIG_FILE "config/wifi/wifi_ap.json"
+#define WIFI_AP_CONFIG_PATH "/assets/" WIFI_AP_CONFIG_FILE
 
 static wifi_ap_record_t stored_aps[WIFI_SCAN_LIST_SIZE];
 static uint16_t stored_ap_count = 0;
@@ -345,15 +345,14 @@ void wifi_stop(void){
 }
 
 static void wifi_load_ap_config(char* ssid, char* passwd, uint8_t* max_conn){
-  if (!storage_file_exists(WIFI_AP_CONFIG_PATH)) {
-    ESP_LOGW(TAG, "Arquivo de config não encontrado. Usando padrões.");
-    return;
+  if (!storage_assets_is_mounted()) {
+      storage_assets_init();
   }
 
-  char *buffer = malloc(512);
-  if (buffer == NULL) return;
+  size_t size = 0;
+  char *buffer = (char*)storage_assets_load_file(WIFI_AP_CONFIG_FILE, &size);
 
-  if (storage_read_string(WIFI_AP_CONFIG_PATH, buffer, 512) == ESP_OK) {
+  if (buffer != NULL) {
     cJSON *root = cJSON_Parse(buffer);
     if (root) {
       cJSON *j_ssid = cJSON_GetObjectItem(root, "ssid");
@@ -373,10 +372,12 @@ static void wifi_load_ap_config(char* ssid, char* passwd, uint8_t* max_conn){
       }
 
       cJSON_Delete(root);
-      ESP_LOGI(TAG, "Configurações carregadas do storage com sucesso.");
+      ESP_LOGI(TAG, "Configurações carregadas do storage assets com sucesso.");
     }
+    free(buffer);
+  } else {
+    ESP_LOGW(TAG, "Arquivo de config não encontrado no assets. Usando padrões.");
   }
-  free(buffer);
 }
 
 esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t max_conn) {
