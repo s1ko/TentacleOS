@@ -14,6 +14,7 @@ static lv_obj_t * menu_indicator_label = NULL;
 static const char * menu_items[] = {
     "BLE",
     "WIFI",
+    "SubGhz",
     "IR",
     "CONFIGS"
 };
@@ -80,10 +81,13 @@ static void menu_event_cb(lv_event_t * e)
             case 1: // WIFI
                 ui_switch_screen(SCREEN_WIFI_MENU);
                 break;
-            case 2: // IR
+            case 2: // SubGhz
+                ui_switch_screen(SCREEN_SUBGHZ_SPECTRUM);
+                break;
+            case 3: // IR
                 // ui_switch_screen(SCREEN_IR_MENU); // Implementar depois
                 break;
-            case 3: // CONFIGS
+            case 4: // CONFIGS
                 // ui_switch_screen(SCREEN_CONFIGS); // Implementar depois
                 break;
             default:
@@ -219,3 +223,4 @@ void ui_menu_open(void)
 
     lv_screen_load(menu_screen);
 }
+
