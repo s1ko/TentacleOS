@@ -89,11 +89,12 @@ void cc1101_strobe(uint8_t cmd) {
  */
 void cc1101_write_reg(uint8_t reg, uint8_t val) {
     if (cc1101_spi == NULL) return;
-    uint8_t tx_data[2] = {reg, val};
     spi_transaction_t t;
     memset(&t, 0, sizeof(t));
     t.length = 16;
-    t.tx_buffer = tx_data;
+    t.flags = SPI_TRANS_USE_TXDATA;
+    t.tx_data[0] = reg;
+    t.tx_data[1] = val;
     spi_device_transmit(cc1101_spi, &t);
 }
 
@@ -102,15 +103,14 @@ void cc1101_write_reg(uint8_t reg, uint8_t val) {
  */
 uint8_t cc1101_read_reg(uint8_t reg) {
     if (cc1101_spi == NULL) return 0;
-    uint8_t tx_data[2] = {0x80 | reg, 0x00};
-    uint8_t rx_data[2] = {0x00, 0x00};
     spi_transaction_t t;
     memset(&t, 0, sizeof(t));
     t.length = 16;
-    t.tx_buffer = tx_data;
-    t.rx_buffer = rx_data;
+    t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
+    t.tx_data[0] = 0x80 | reg;
+    t.tx_data[1] = 0x00;
     spi_device_transmit(cc1101_spi, &t);
-    return rx_data[1];
+    return t.rx_data[1];
 }
 
 /**
