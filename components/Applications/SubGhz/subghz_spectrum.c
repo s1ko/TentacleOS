@@ -7,10 +7,13 @@
 
 static const char *TAG = "SUBGHZ_SPECTRUM";
 static TaskHandle_t spectrum_task_handle = NULL;
+static volatile bool s_stop_requested = false;
+static volatile bool s_is_running = false;
 
 float spectrum_data[SPECTRUM_SAMPLES];
 
 void subghz_spectrum_task(void *pvParameters) {
+  s_is_running = true;
   int log_counter = 0;
 
   // Configuração de "Zoom Out": Varredura de 600 kHz (+/- 300 kHz)
@@ -22,7 +25,7 @@ void subghz_spectrum_task(void *pvParameters) {
   const uint32_t STEP_HZ = SPAN_HZ / SPECTRUM_SAMPLES;
   const uint32_t START_FREQ = CENTER_FREQ - (SPAN_HZ / 2);
 
-  while (1) {
+  while (!s_stop_requested) {
     // We assume the driver is initialized. If not, we might want to check or handle it.
     // There is no public "is_initialized" in cc1101.h, but we rely on the system setup.
 
@@ -31,6 +34,8 @@ void subghz_spectrum_task(void *pvParameters) {
     // Loop de varredura (Core Loop)
     // Executa 80 iterações com delay correto para calibração
     for (int i = 0; i < SPECTRUM_SAMPLES; i++) {
+      if (s_stop_requested) break;
+
       uint32_t current_freq = START_FREQ + (i * STEP_HZ);
 
       // 1. IDLE para preparar
@@ -75,13 +80,21 @@ void subghz_spectrum_task(void *pvParameters) {
     // Delay entre varreduras para aliviar o barramento SPI e a CPU
     vTaskDelay(pdMS_TO_TICKS(50));
   }
+
+  // Cleanup before exit
+  cc1101_strobe(CC1101_SIDLE);
+  s_is_running = false;
+  spectrum_task_handle = NULL;
+  vTaskDelete(NULL);
 }
 
 void subghz_spectrum_start(void) {
-  if (spectrum_task_handle != NULL) {
+  if (spectrum_task_handle != NULL || s_is_running) {
     ESP_LOGW(TAG, "Spectrum task already running");
     return;
   }
+
+  s_stop_requested = false;
 
   // Inicializa o array de espectro com "noise floor"
   for(int i = 0; i < SPECTRUM_SAMPLES; i++) {
@@ -93,10 +106,23 @@ void subghz_spectrum_start(void) {
 }
 
 void subghz_spectrum_stop(void) {
-  if (spectrum_task_handle != NULL) {
+  if (spectrum_task_handle != NULL || s_is_running) {
     ESP_LOGI(TAG, "Stopping Spectrum Task...");
-    vTaskDelete(spectrum_task_handle);
-    spectrum_task_handle = NULL;
+    s_stop_requested = true;
+    
+    // Wait for task to finish (timeout 1s)
+    int retries = 0;
+    while (s_is_running && retries < 20) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+        retries++;
+    }
+    
+    if (s_is_running) {
+        ESP_LOGE(TAG, "Task failed to stop gracefully, forcing delete");
+        if (spectrum_task_handle) vTaskDelete(spectrum_task_handle);
+        s_is_running = false;
+        spectrum_task_handle = NULL;
+    }
   }
 }
 

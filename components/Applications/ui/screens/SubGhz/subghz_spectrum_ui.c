@@ -50,7 +50,19 @@ static void spectrum_event_cb(lv_event_t * e) {
     if(code == LV_EVENT_KEY) {
         uint32_t key = lv_event_get_key(e);
         if(key == LV_KEY_ESC) {
+            // Stop UI Timer first to prevent access to freed objects
+            if (update_timer) {
+                lv_timer_del(update_timer);
+                update_timer = NULL;
+            }
+            
+            // Clear pointers
+            chart = NULL;
+            ser_rssi = NULL;
+
+            // Stop backend
             subghz_spectrum_stop();
+            
             // Return to previous menu or main menu. 
             // Assuming Main Menu for now or SubGhz Menu if it existed.
             ui_switch_screen(SCREEN_MENU); 
@@ -65,6 +77,11 @@ void ui_subghz_spectrum_open(void) {
     if(screen_spectrum) {
         lv_obj_del(screen_spectrum);
         screen_spectrum = NULL;
+    }
+
+    if (update_timer) {
+        lv_timer_del(update_timer);
+        update_timer = NULL;
     }
 
     screen_spectrum = lv_obj_create(NULL);
