@@ -166,7 +166,9 @@ static void menu_update_ui(void) {
 
 static void menu_event_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_KEY) return;
+    
     uint32_t key = lv_event_get_key(e);
+    
     if (key == LV_KEY_RIGHT) {
         menu_index = (menu_index + 1) % MENU_ITEM_COUNT;
         menu_update_ui();
@@ -175,6 +177,26 @@ static void menu_event_cb(lv_event_t * e) {
         menu_update_ui();
     } else if (key == LV_KEY_ESC) {
         ui_switch_screen(SCREEN_HOME);
+    } else if (key == LV_KEY_ENTER) {
+        ESP_LOGI(TAG, "ENTRANDO NO SISTEMA: %s", menu_data[menu_index].name);
+        
+        switch(menu_index) {
+            case 0: // BLUETOOTH
+                // ui_switch_screen(SCREEN_BLE_MENU); 
+                break;
+            case 1: // WIFI
+                ui_switch_screen(SCREEN_WIFI_MENU);
+                break;
+            case 2: // INFRARED
+                break;
+            case 5: // RADIO FREQUENCY
+                ui_switch_screen(SCREEN_SUBGHZ_SPECTRUM);
+                break;
+            // ADD OUTROS //** TODO
+            default:
+                ESP_LOGW(TAG, "!!!Nenhuma tela definida!!!");
+                break;
+        }
     }
 }
 
