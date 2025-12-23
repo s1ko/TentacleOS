@@ -1,5 +1,6 @@
 # compiled output
 /build/
+/lvgl-env/
 
 .vscode/
 
