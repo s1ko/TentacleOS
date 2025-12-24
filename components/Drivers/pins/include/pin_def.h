@@ -23,8 +23,8 @@
 
 // extra gpios
 #define GPIO_CS_PIN     3
-#define GPIO_SDA_PIN    12
-#define GPIO_SCL_PIN    9
+#define GPIO_SDA_PIN    8  // GDO0
+#define GPIO_SCL_PIN    9  // GDO2
 
 // chip select
 #define SD_CARD_CS_PIN  14
