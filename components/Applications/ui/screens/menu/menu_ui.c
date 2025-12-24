@@ -26,6 +26,7 @@ static menu_item_t menu_data[] = {
     {"CONFIGURATION", {"/assets/frames/config_frame_0.bin", "/assets/frames/config_frame_1.bin", "/assets/frames/config_frame_2.bin"}, {{39,38}, {40,52}, {40,52}}, {NULL, NULL, NULL}},
     {"NFC",           {"/assets/frames/nfc_frame_0.bin", "/assets/frames/nfc_frame_1.bin", "/assets/frames/nfc_frame_2.bin"}, {{38,38}, {41,50}, {41,50}}, {NULL, NULL, NULL}},
     {"RADIO FREQUENCY", {"/assets/frames/radio_frame_0.bin", "/assets/frames/radio_frame_1.bin", "/assets/frames/radio_frame_2.bin"}, {{38,38}, {41,50}, {41,50}}, {NULL, NULL, NULL}},
+    {"BROWSE FILES", {"/assets/frames/files_frame_0.bin", "/assets/frames/files_frame_1.bin", "/assets/frames/files_frame_2.bin"}, {{38,38}, {39,51}, {39,51}}, {NULL, NULL, NULL}},
 };
 
 #define MENU_ITEM_COUNT (sizeof(menu_data) / sizeof(menu_data[0]))
