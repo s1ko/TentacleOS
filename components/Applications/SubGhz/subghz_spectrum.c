@@ -47,17 +47,18 @@ void subghz_spectrum_task(void *pvParameters) {
       // 3. Ativa RX (Calibração automática na transição IDLE->RX)
       cc1101_strobe(CC1101_SRX);
 
-      // Tempo de estabilização otimizado para pequenos saltos (800us)
-      ets_delay_us(800); 
+      // Tempo de estabilização otimizado (Reduzido para 400us para maior agilidade)
+      ets_delay_us(400); 
 
       // --- DETECÇÃO DE PICO (OOK MITIGATION) ---
-      // Lê o RSSI múltiplas vezes para pegar o sinal "ON" se estiver pulsando (controle remoto)
+      // Lê o RSSI múltiplas vezes para pegar o sinal "ON" se estiver pulsando
+      // Reduzido para 3 amostras para aumentar FPS
       float local_max = -130.0;
-      for(int k=0; k<5; k++) {
+      for(int k=0; k<3; k++) {
         uint8_t raw = cc1101_read_reg(CC1101_RSSI | 0x40);
         float val = cc1101_convert_rssi(raw);
         if(val > local_max) local_max = val;
-        ets_delay_us(50); // Breve intervalo entre amostras
+        ets_delay_us(20); // Intervalo mínimo
       }
 
       spectrum_data[i] = local_max;
@@ -67,8 +68,8 @@ void subghz_spectrum_task(void *pvParameters) {
         sweep_max_dbm = local_max;
       }
 
-      // Yield a cada 4 amostras para não travar a UI
-      if (i % 4 == 0) {
+      // Yield a cada 8 amostras (menos overhead de context switch)
+      if (i % 8 == 0) {
         vTaskDelay(1);
       }
     }
@@ -77,8 +78,8 @@ void subghz_spectrum_task(void *pvParameters) {
       log_counter = 0;
     }
 
-    // Delay entre varreduras para aliviar o barramento SPI e a CPU
-    vTaskDelay(pdMS_TO_TICKS(50));
+    // Delay entre varreduras reduzido para 10ms (Scan mais rápido)
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 
   // Cleanup before exit
