@@ -116,7 +116,7 @@ static void spam_task(void *pvParameters) {
     rc = ble_gap_adv_start(BLE_OWN_ADDR_RANDOM, NULL, BLE_HS_FOREVER, &adv_params, NULL, NULL);
 
     // wait loop delay
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(150));
 
     ble_gap_adv_stop();
 
@@ -149,6 +149,9 @@ esp_err_t spam_start(int attack_index) {
   }
 
   bluetooth_service_stop_advertising();
+
+  // Garante potência máxima para o spam ir mais longe
+  bluetooth_service_set_max_power();
 
   current_category = attack_index;
   spam_running = true;

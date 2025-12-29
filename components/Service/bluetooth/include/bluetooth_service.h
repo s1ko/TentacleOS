@@ -68,5 +68,15 @@ esp_err_t bluetooth_service_stop_advertising(void);
  */
 uint8_t bluetooth_service_get_own_addr_type(void);
 
+/**
+ * @brief Define a potência de transmissão do Bluetooth para o nível máximo permitido.
+ * Útil para aplicações que requerem maior alcance, como o spam.
+ *
+ * @return esp_err_t
+ * - ESP_OK: Sucesso
+ * - Outros erros da API esp_ble_tx_power_set
+ */
+esp_err_t bluetooth_service_set_max_power(void);
+
 #endif // BLUETOOTH_SERVICE_H
 
