@@ -21,11 +21,31 @@ static const char *TAG = "SUBGHZ_RX";
 #define SOFTWARE_FILTER_US 15  // Software filter (15us) to clean up noise
 #define MAX_PULSE_NS      10000000 // 10ms idle timeout
 
+// Hopping Frequencies
+static const uint32_t HOOP_FREQS[] = {
+    433920000,
+    868350000,
+    315000000,
+    300000000,
+    390000000,
+    418000000,
+    915000000,
+    302750000,
+    303870000,
+    304250000,
+    310000000,
+    318000000
+};
+static const size_t HOOP_FREQS_COUNT = sizeof(HOOP_FREQS) / sizeof(HOOP_FREQS[0]);
+
 static TaskHandle_t rx_task_handle = NULL;
 static volatile bool s_is_running = false;
 static subghz_mode_t s_rx_mode = SUBGHZ_MODE_SCAN;
 static subghz_modulation_t s_rx_mod = SUBGHZ_MODULATION_ASK;
 static uint32_t s_rx_freq = 433920000;
+static bool s_hopping_active = false;
+static int s_hoop_idx = 0;
+
 static rmt_channel_handle_t rx_channel = NULL;
 static QueueHandle_t rx_queue = NULL;
 static rmt_symbol_word_t raw_symbols[RX_BUFFER_SIZE];
@@ -90,7 +110,24 @@ static void subghz_rx_task(void *pvParameters) {
     // Start first reception
     ESP_ERROR_CHECK(rmt_receive(rx_channel, raw_symbols, sizeof(raw_symbols), &receive_config));
 
+    TickType_t last_hop_time = xTaskGetTickCount();
+    const TickType_t hop_interval = pdMS_TO_TICKS(5000);
+
     while (s_is_running) {
+        // Hopping Logic
+        if (s_hopping_active && (xTaskGetTickCount() - last_hop_time > hop_interval)) {
+             s_hoop_idx = (s_hoop_idx + 1) % HOOP_FREQS_COUNT;
+             s_rx_freq = HOOP_FREQS[s_hoop_idx];
+             
+             ESP_LOGI(TAG, "Hopping to: %lu Hz", (long unsigned int)s_rx_freq);
+             
+             cc1101_strobe(CC1101_SIDLE);
+             cc1101_set_frequency(s_rx_freq);
+             cc1101_strobe(CC1101_SRX);
+             
+             last_hop_time = xTaskGetTickCount();
+        }
+
         if (xQueueReceive(rx_queue, &rx_data, pdMS_TO_TICKS(100)) == pdPASS) {
             
             if (rx_data.num_symbols > 0) {
@@ -129,11 +166,11 @@ static void subghz_rx_task(void *pvParameters) {
                         // SCAN MODE: Try to decode
                         subghz_data_t decoded = {0};
                         if (subghz_process_raw(decode_buffer, decode_idx, &decoded)) {
-                            ESP_LOGI(TAG, "DECODED: Protocol: %s | Serial: 0x%lX | Btn: 0x%X | Bits: %d", 
-                                     decoded.protocol_name, decoded.serial, decoded.btn, decoded.bit_count);
+                            ESP_LOGI(TAG, "DECODED: Protocol: %s | Serial: 0x%lX | Btn: 0x%X | Bits: %d | Freq: %lu", 
+                                     decoded.protocol_name, decoded.serial, decoded.btn, decoded.bit_count, (long unsigned int)s_rx_freq);
                         } else {
                             // DEBUG: Show RAW even if failed, to help calibrate decoders
-                            ESP_LOGW(TAG, "Unknown Protocol detected (Length: %d). RAW Data below:", decode_idx);
+                            ESP_LOGW(TAG, "Unknown Protocol detected (Length: %d) at %lu Hz. RAW Data below:", decode_idx, (long unsigned int)s_rx_freq);
                             printf("RAW: ");
                             for (size_t k = 0; k < decode_idx; k++) {
                                 printf("%ld ", (long)decode_buffer[k]);
@@ -166,7 +203,16 @@ void subghz_receiver_start(subghz_mode_t mode, subghz_modulation_t mod, uint32_t
     if (s_is_running) return;
     s_rx_mode = mode;
     s_rx_mod = mod;
-    s_rx_freq = freq;
+    
+    if (freq == 0) {
+        s_hopping_active = true;
+        s_hoop_idx = 0;
+        s_rx_freq = HOOP_FREQS[0];
+    } else {
+        s_hopping_active = false;
+        s_rx_freq = freq;
+    }
+
     xTaskCreatePinnedToCore(subghz_rx_task, "subghz_rx", 4096, NULL, 5, &rx_task_handle, 1);
 }
 
