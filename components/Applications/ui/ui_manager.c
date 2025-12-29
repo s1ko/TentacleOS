@@ -9,8 +9,11 @@
 #include "menu_ui.h"
 #include "wifi_ui.h"
 #include "wifi_scan_ui.h"
+#include "ui_ble_menu.h"
+#include "ui_ble_spam.h"
 #include "subghz_spectrum_ui.h"
 #include "esp_log.h"
+#include "bluetooth_service.h"
 
 #include "lvgl.h"
 #include "lv_port_disp.h"
@@ -33,6 +36,10 @@ static SemaphoreHandle_t xGuiSemaphore = NULL;
 static void ui_task(void *pvParameter);
 static void lv_tick_task(void *arg);
 static void clear_current_screen(void);
+
+static bool is_ble_screen(screen_id_t screen) {
+    return (screen == SCREEN_BLE_MENU || screen == SCREEN_BLE_SPAM);
+}
 
 screen_id_t current_screen_id = SCREEN_NONE;
 
@@ -93,6 +100,18 @@ static void clear_current_screen(void){
 void ui_switch_screen(screen_id_t new_screen) {
   if (ui_acquire()) {
 
+    // Power Management for BLE
+    bool was_ble = is_ble_screen(current_screen_id);
+    bool is_ble = is_ble_screen(new_screen);
+
+    if (is_ble && !was_ble) {
+        ESP_LOGI(TAG, "Entering BLE Mode: Initializing Service...");
+        bluetooth_service_init();
+    } else if (!is_ble && was_ble) {
+        ESP_LOGI(TAG, "Exiting BLE Mode: Stopping Service...");
+        bluetooth_service_stop();
+    }
+
     clear_current_screen();
 
     switch (new_screen) {
@@ -110,6 +129,14 @@ void ui_switch_screen(screen_id_t new_screen) {
       
       case SCREEN_WIFI_SCAN:
         ui_wifi_scan_open();
+        break;
+
+      case SCREEN_BLE_MENU:
+        ui_ble_menu_open();
+        break;
+
+      case SCREEN_BLE_SPAM:
+        ui_ble_spam_open();
         break;
 
       case SCREEN_SUBGHZ_SPECTRUM:
