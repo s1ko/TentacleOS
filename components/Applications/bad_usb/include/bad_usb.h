@@ -14,15 +14,16 @@
 
 #ifndef BAD_USB_H
 #define BAD_USB_H
+
+#include <stdint.h>
+
 void bad_usb_init(void);
+void bad_usb_deinit(void);
 
-void bad_usb_stop(void);
-void run_payload_helloworld(void);
-
-void run_payload_powershell(void);
-
-void run_payload_rickroll(void);
-
-void run_payload_linux_rickroll(void);
+// Low-level actuators
+void bad_usb_press_key(uint8_t keycode, uint8_t modifier);
+void type_string_abnt2(const char* str);
+void type_string_us(const char* str);
+void bad_usb_wait_for_connection(void);
 
 #endif // BAD_USB_H
