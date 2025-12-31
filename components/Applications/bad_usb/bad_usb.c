@@ -29,52 +29,51 @@ static const char *TAG = "BAD_USB_MODULE";
 #endif
 
 
-// --- 2. FUNÇÕES AUXILIARES ESTÁTICAS ---
 void bad_usb_press_key(uint8_t keycode, uint8_t modifier) {
-    uint8_t keycode_array[6] = {0};
-    keycode_array[0] = keycode;
-    tud_hid_keyboard_report(REPORT_ID_KEYBOARD, modifier, keycode_array);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
-    vTaskDelay(pdMS_TO_TICKS(10));
+  uint8_t keycode_array[6] = {0};
+  keycode_array[0] = keycode;
+  tud_hid_keyboard_report(REPORT_ID_KEYBOARD, modifier, keycode_array);
+  vTaskDelay(pdMS_TO_TICKS(10));
+  tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, NULL);
+  vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 void type_string_us(const char* str) {
-    for (size_t i = 0; str[i] != '\0'; ++i) {
-        char c = str[i];
-        uint8_t keycode = 0;
-        uint8_t modifier = 0;
-        if (c >= 'a' && c <= 'z') { keycode = HID_KEY_A + (c - 'a'); }
-        else if (c >= 'A' && c <= 'Z') { keycode = HID_KEY_A + (c - 'A'); modifier = KEYBOARD_MODIFIER_LEFTSHIFT; }
-        else if (c >= '1' && c <= '9') { keycode = HID_KEY_1 + (c - '1'); }
-        else if (c == '0') { keycode = HID_KEY_0; }
-        else {
-            switch (c) {
-                case ' ': keycode = HID_KEY_SPACE; break;
-                case '!': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_1; break;
-                case '@': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_2; break;
-                case '#': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_3; break;
-                case '$': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_4; break;
-                case '%': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_5; break;
-                case '^': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_6; break;
-                case '&': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_7; break;
-                case '*': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_8; break;
-                case '(': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_9; break;
-                case ')': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_0; break;
-                case '-': keycode = HID_KEY_MINUS; break;
-                case '_': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_MINUS; break;
-                case '=': keycode = HID_KEY_EQUAL; break;
-                case '+': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_EQUAL; break;
-                case '.': keycode = HID_KEY_PERIOD; break;
-                case ',': keycode = HID_KEY_COMMA; break;
-                case '/': keycode = HID_KEY_SLASH; break;
-                case '?': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_SLASH; break;
-                case ':': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_SEMICOLON; break;
-                case ';': keycode = HID_KEY_SEMICOLON; break;
-            }
-        }
-        if (keycode != 0) bad_usb_press_key(keycode, modifier);
+  for (size_t i = 0; str[i] != '\0'; ++i) {
+    char c = str[i];
+    uint8_t keycode = 0;
+    uint8_t modifier = 0;
+    if (c >= 'a' && c <= 'z') { keycode = HID_KEY_A + (c - 'a'); }
+    else if (c >= 'A' && c <= 'Z') { keycode = HID_KEY_A + (c - 'A'); modifier = KEYBOARD_MODIFIER_LEFTSHIFT; }
+    else if (c >= '1' && c <= '9') { keycode = HID_KEY_1 + (c - '1'); }
+    else if (c == '0') { keycode = HID_KEY_0; }
+    else {
+      switch (c) {
+        case ' ': keycode = HID_KEY_SPACE; break;
+        case '!': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_1; break;
+        case '@': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_2; break;
+        case '#': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_3; break;
+        case '$': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_4; break;
+        case '%': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_5; break;
+        case '^': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_6; break;
+        case '&': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_7; break;
+        case '*': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_8; break;
+        case '(': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_9; break;
+        case ')': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_0; break;
+        case '-': keycode = HID_KEY_MINUS; break;
+        case '_': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_MINUS; break;
+        case '=': keycode = HID_KEY_EQUAL; break;
+        case '+': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_EQUAL; break;
+        case '.': keycode = HID_KEY_PERIOD; break;
+        case ',': keycode = HID_KEY_COMMA; break;
+        case '/': keycode = HID_KEY_SLASH; break;
+        case '?': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_SLASH; break;
+        case ':': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_SEMICOLON; break;
+        case ';': keycode = HID_KEY_SEMICOLON; break;
+      }
     }
+    if (keycode != 0) bad_usb_press_key(keycode, modifier);
+  }
 }
 
 void type_string_abnt2(const char* str) {
@@ -82,28 +81,23 @@ void type_string_abnt2(const char* str) {
     uint8_t c1 = (uint8_t)str[i];
     uint8_t c2 = (uint8_t)str[i+1];
 
-    // Verifica se o byte atual é o início de uma sequência de 2 bytes
-    if (c1 == '\'') { // Aspas Simples
-      // Pressiona a tecla morta '´' e depois espaço
+    if (c1 == '\'') {
       bad_usb_press_key(HID_KEY_BRACKET_LEFT, 0);
       bad_usb_press_key(HID_KEY_SPACE, 0);
-      continue; // Pula para o próximo caractere do loop
+      continue; 
     }
-    if (c1 == '"') { // Aspas Duplas
-      // Pressiona SHIFT + tecla '´'
+    if (c1 == '"') { 
       bad_usb_press_key(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT);
-      continue; // Pula para o próximo caractere do loop
+      continue; 
     }
     if ((c1 & 0xE0) == 0xC0 && c2 != '\0') {
       bool char_processed = true;
 
-      // Mapeamento para 'ç' e 'Ç'
       if (c1 == 0xC3 && c2 == 0xA7) { // ç
         bad_usb_press_key(HID_KEY_SEMICOLON, 0);
       } else if (c1 == 0xC3 && c2 == 0x87) { // Ç
         bad_usb_press_key(HID_KEY_SEMICOLON, KEYBOARD_MODIFIER_LEFTSHIFT);
 
-        // Mapeamento para acentos agudos: ´ + vogal
       } else if (c1 == 0xC3 && c2 == 0xA1) { // á
         bad_usb_press_key(HID_KEY_BRACKET_LEFT, 0); bad_usb_press_key(HID_KEY_A, 0);
       } else if (c1 == 0xC3 && c2 == 0xA9) { // é
@@ -115,7 +109,6 @@ void type_string_abnt2(const char* str) {
       } else if (c1 == 0xC3 && c2 == 0xBA) { // ú
         bad_usb_press_key(HID_KEY_BRACKET_LEFT, 0); bad_usb_press_key(HID_KEY_U, 0);
 
-        // Mapeamento para acentos circunflexos: ^ + vogal
       } else if (c1 == 0xC3 && c2 == 0xA2) { // â
         bad_usb_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT); bad_usb_press_key(HID_KEY_A, 0);
       } else if (c1 == 0xC3 && c2 == 0xAA) { // ê
@@ -123,13 +116,11 @@ void type_string_abnt2(const char* str) {
       } else if (c1 == 0xC3 && c2 == 0xB4) { // ô
         bad_usb_press_key(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT); bad_usb_press_key(HID_KEY_O, 0);
 
-        // Mapeamento para til: ~ + vogal
       } else if (c1 == 0xC3 && c2 == 0xA3) { // ã
         bad_usb_press_key(HID_KEY_APOSTROPHE, 0); bad_usb_press_key(HID_KEY_A, 0);
       } else if (c1 == 0xC3 && c2 == 0xB5) { // õ
         bad_usb_press_key(HID_KEY_APOSTROPHE, 0); bad_usb_press_key(HID_KEY_O, 0);
 
-        // Mapeamento para crase: ` + a
       } else if (c1 == 0xC3 && c2 == 0xA0) { // à
         bad_usb_press_key(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT); bad_usb_press_key(HID_KEY_A, 0);
 
@@ -190,12 +181,12 @@ void type_string_abnt2(const char* str) {
 }
 
 void bad_usb_wait_for_connection(void) {
-    ESP_LOGI(TAG, "Aguardando conexao USB para executar o payload...");
-    while (!tud_mounted()) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    ESP_LOGI(TAG, "Dispositivo conectado. Executando em 2 segundos...");
-    vTaskDelay(pdMS_TO_TICKS(2000));
+  ESP_LOGI(TAG, "Aguardando conexao USB para executar o payload...");
+  while (!tud_mounted()) {
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+  ESP_LOGI(TAG, "Dispositivo conectado. Executando em 2 segundos...");
+  vTaskDelay(pdMS_TO_TICKS(2000));
 }
 
 void bad_usb_init(void) {

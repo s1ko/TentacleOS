@@ -39,7 +39,6 @@ void ducky_set_layout(ducky_layout_t layout) {
     ESP_LOGI(TAG, "Keyboard layout set to: %s", layout == DUCKY_LAYOUT_ABNT2 ? "ABNT2" : "US");
 }
 
-// --- Key Mapping ---
 typedef struct {
   const char* name;
   uint8_t code;
@@ -107,7 +106,6 @@ static uint8_t find_key_code(const char* str) {
   return 0;
 }
 
-// Helper to remove newline characters
 static void trim_newline(char* str) {
   size_t len = strlen(str);
   while (len > 0 && (str[len - 1] == '\r' || str[len - 1] == '\n')) {
@@ -116,7 +114,6 @@ static void trim_newline(char* str) {
   }
 }
 
-// Helper to check if a word is a modifier
 static bool is_modifier(const char* word, uint8_t* current_mod) {
   if (strcasecmp(word, "CTRL") == 0 || strcasecmp(word, "CONTROL") == 0) {
     *current_mod |= KEYBOARD_MODIFIER_LEFTCTRL;
@@ -138,10 +135,8 @@ static bool is_modifier(const char* word, uint8_t* current_mod) {
 }
 
 static void process_line(char* line) {
-  // 1. Skip comments and empty lines
   if (strlen(line) < 2 || strncmp(line, "REM", 3) == 0) return;
 
-  // 2. Tokenize (simple space splitting)
   // Note: STRING command handles the rest of the line as one arg
   char *saveptr = NULL;
   char* cmd = strtok_r(line, " ", &saveptr);
@@ -155,7 +150,6 @@ static void process_line(char* line) {
     }
   } 
   else if (strcmp(cmd, "STRING") == 0) {
-    // The rest of the line is the string.
     char* next_token = strtok_r(NULL, "", &saveptr); // Get rest of string
     if (next_token) {
         if (s_layout == DUCKY_LAYOUT_ABNT2) {
@@ -166,29 +160,23 @@ static void process_line(char* line) {
     }
   }
   else {
-    // Handle Key Combinations (e.g., CTRL ALT DEL, GUI r)
     uint8_t modifiers = 0;
     uint8_t keycode = 0;
 
-    // Check if the command itself is a modifier or key
     if (is_modifier(cmd, &modifiers)) {
-      // Loop through remaining tokens
       char* token;
       while ((token = strtok_r(NULL, " ", &saveptr)) != NULL) {
         if (!is_modifier(token, &modifiers)) {
-          // It's a key
           keycode = find_key_code(token);
         }
       }
     } else {
-      // First word wasn't a modifier (e.g. "ENTER", "F1")
       keycode = find_key_code(cmd);
 
       // Check for potential following modifiers or keys? 
       // Standard DuckyScript usually puts modifiers first or implies single key press.
     }
 
-    // Execute
     if (keycode != 0 || modifiers != 0) {
       bad_usb_press_key(keycode, modifiers);
     }
@@ -205,21 +193,19 @@ void ducky_parse_and_run(const char *script) {
 
     s_abort_flag = false;
 
-    // Create a copy because strtok is destructive
     char* script_copy = strdup(script);
     if (!script_copy) {
         ESP_LOGE(TAG, "Failed to allocate memory for script parsing");
         return;
     }
 
-    // Count total lines
     int total_lines = 0;
     const char *p = script;
     while (*p) {
         if (*p == '\n') total_lines++;
         p++;
     }
-    if (p > script && *(p-1) != '\n') total_lines++; // Last line if not ending with \n
+    if (p > script && *(p-1) != '\n') total_lines++; 
 
     int current_line = 0;
     char *saveptr = NULL;
@@ -238,7 +224,6 @@ void ducky_parse_and_run(const char *script) {
         ESP_LOGD(TAG, "Processing line: %s", line);
         process_line(line);
         
-        // Small default delay between commands to prevent buffer overflow on host
         vTaskDelay(pdMS_TO_TICKS(20)); 
         
         line = strtok_r(NULL, "\n", &saveptr);

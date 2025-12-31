@@ -28,7 +28,6 @@
 
 
 
-// Inclua aqui a tela inicial
 
 #define TAG "UI_MANAGER"
 
@@ -45,65 +44,65 @@ static void lv_tick_task(void *arg);
 static void clear_current_screen(void);
 
 static bool is_ble_screen(screen_id_t screen) {
-    return (screen == SCREEN_BLE_MENU || screen == SCREEN_BLE_SPAM || screen == SCREEN_BLE_SPAM_SELECT);
+  return (screen == SCREEN_BLE_MENU || screen == SCREEN_BLE_SPAM || screen == SCREEN_BLE_SPAM_SELECT);
 }
 
 static bool is_badusb_screen(screen_id_t screen) {
-    return (screen == SCREEN_BADUSB_MENU || screen == SCREEN_BADUSB_BROWSER || 
-            screen == SCREEN_BADUSB_LAYOUT || screen == SCREEN_BADUSB_CONNECT || 
-            screen == SCREEN_BADUSB_RUNNING);
+  return (screen == SCREEN_BADUSB_MENU || screen == SCREEN_BADUSB_BROWSER || 
+  screen == SCREEN_BADUSB_LAYOUT || screen == SCREEN_BADUSB_CONNECT || 
+  screen == SCREEN_BADUSB_RUNNING);
 }
 
 screen_id_t current_screen_id = SCREEN_NONE;
 
 void ui_init(void)
 {
-    ESP_LOGI(TAG, "Inicializando UI Manager...");
+  ESP_LOGI(TAG, "Inicializando UI Manager...");
 
-    xGuiSemaphore = xSemaphoreCreateRecursiveMutex();
-    if (!xGuiSemaphore) {
-        ESP_LOGE(TAG, "Falha ao criar Mutex da UI");
-        return;
-    }
+  xGuiSemaphore = xSemaphoreCreateRecursiveMutex();
+  if (!xGuiSemaphore) {
+    ESP_LOGE(TAG, "Falha ao criar Mutex da UI");
+    return;
+  }
 
-    const esp_timer_create_args_t periodic_timer_args = {
-        .callback = &lv_tick_task,
-        .name = "lvgl_tick"
-    };
-    esp_timer_handle_t periodic_timer;
-    ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, LVGL_TICK_PERIOD_MS * 1000));
+  const esp_timer_create_args_t periodic_timer_args = {
+    .callback = &lv_tick_task,
+    .name = "lvgl_tick"
+  };
+  esp_timer_handle_t periodic_timer;
+  ESP_ERROR_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
+  ESP_ERROR_CHECK(esp_timer_start_periodic(periodic_timer, LVGL_TICK_PERIOD_MS * 1000));
 
-    xTaskCreatePinnedToCore(
-        ui_task,            
-        "UI Task",          
-        UI_TASK_STACK_SIZE, 
-        NULL,               
-        UI_TASK_PRIORITY,   
-        NULL,               
-        UI_TASK_CORE        
-    );
-    
-    ESP_LOGI(TAG, "UI Manager inicializado com sucesso.");
+  xTaskCreatePinnedToCore(
+    ui_task,            
+    "UI Task",          
+    UI_TASK_STACK_SIZE, 
+    NULL,               
+    UI_TASK_PRIORITY,   
+    NULL,               
+    UI_TASK_CORE        
+  );
+
+  ESP_LOGI(TAG, "UI Manager inicializado com sucesso.");
 }
 
 static void ui_task(void *pvParameter)
 {
-    ESP_LOGI(TAG, "UI Task iniciada.");
+  ESP_LOGI(TAG, "UI Task iniciada.");
 
+  if (ui_acquire()) {
+    ui_home_open(); 
+    ui_release();
+  }
+
+  while (1) {
     if (ui_acquire()) {
-        ui_home_open(); 
-        ui_release();
+      lv_timer_handler();
+      ui_release();
     }
 
-    while (1) {
-        if (ui_acquire()) {
-            lv_timer_handler();
-            ui_release();
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
 }
 
 static void clear_current_screen(void){
@@ -118,23 +117,11 @@ void ui_switch_screen(screen_id_t new_screen) {
     bool is_ble = is_ble_screen(new_screen);
 
     if (is_ble && !was_ble) {
-        ESP_LOGI(TAG, "Entering BLE Mode: Initializing Service...");
-        bluetooth_service_init();
+      ESP_LOGI(TAG, "Entering BLE Mode: Initializing Service...");
+      bluetooth_service_init();
     } else if (!is_ble && was_ble) {
-        ESP_LOGI(TAG, "Exiting BLE Mode: Stopping Service...");
-        bluetooth_service_stop();
-    }
-
-    // Power Management for BadUSB
-    bool was_badusb = is_badusb_screen(current_screen_id);
-    bool is_badusb = is_badusb_screen(new_screen);
-
-    if (is_badusb && !was_badusb) {
-        ESP_LOGI(TAG, "Entering BadUSB Mode: Initializing Driver...");
-        bad_usb_init();
-    } else if (!is_badusb && was_badusb) {
-        ESP_LOGI(TAG, "Exiting BadUSB Mode: Stopping Driver...");
-        bad_usb_deinit();
+      ESP_LOGI(TAG, "Exiting BLE Mode: Stopping Service...");
+      bluetooth_service_stop();
     }
 
     clear_current_screen();
@@ -151,7 +138,7 @@ void ui_switch_screen(screen_id_t new_screen) {
       case SCREEN_WIFI_MENU:
         ui_wifi_menu_open();
         break;
-      
+
       case SCREEN_WIFI_SCAN:
         ui_wifi_scan_open();
         break;
@@ -201,30 +188,26 @@ void ui_switch_screen(screen_id_t new_screen) {
   }
 }
 
-// Callback do Timer de Hardware (Interrupção)
 static void lv_tick_task(void *arg)
 {
-    (void) arg;
-    lv_tick_inc(LVGL_TICK_PERIOD_MS);
+  (void) arg;
+  lv_tick_inc(LVGL_TICK_PERIOD_MS);
 }
 
-// --- Funções Públicas de Thread-Safety ---
 
 bool ui_acquire(void)
 {
   if (xGuiSemaphore != NULL) {
-        // MUDANÇA: xSemaphoreTake -> xSemaphoreTakeRecursive
-        return (xSemaphoreTakeRecursive(xGuiSemaphore, portMAX_DELAY) == pdTRUE);
-    }
-    return false;
+    return (xSemaphoreTakeRecursive(xGuiSemaphore, portMAX_DELAY) == pdTRUE);
+  }
+  return false;
 }
 
 void ui_release(void)
 {
   if (xGuiSemaphore != NULL) {
-        // MUDANÇA: xSemaphoreGive -> xSemaphoreGiveRecursive
-        xSemaphoreGiveRecursive(xGuiSemaphore);
-    }
+    xSemaphoreGiveRecursive(xGuiSemaphore);
+  }
 }
 
 
