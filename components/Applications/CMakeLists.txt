@@ -25,11 +25,13 @@ file(GLOB_RECURSE FOOTER_UI_SRCS "ui/components/footer/*.c")
 file(GLOB_RECURSE SUBGHZ_APP_SRCS "SubGhz/*.c")
 file(GLOB_RECURSE BLE_APP_SRCS "bluetooth/*.c")
 file(GLOB_RECURSE BADUSB_APP_SRCS "bad_usb/*.c")
+file(GLOB_RECURSE ESPNOW_CHAT_APP_SRCS "espnow_chat/*.c")
 
 idf_component_register(SRCS 
   "play/play.c"
   "wifi/wifi_deauther.c"
   "wifi/evil_twin.c"
+  ${ESPNOW_CHAT_APP_SRCS}
   ${BADUSB_APP_SRCS}
   ${BLE_APP_SRCS}
   "ui/ui_manager.c"
@@ -47,6 +49,7 @@ idf_component_register(SRCS
   INCLUDE_DIRS 
   "play/include"
   "wifi/include"   
+  "espnow_chat/include"
   "ui/screens/SubGhz/include"
   "ui/screens/bluetooth/include"
   "ui/screens/badusb/include"

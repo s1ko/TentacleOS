@@ -45,6 +45,7 @@ idf_component_register(SRCS
   "ir/ir_burst.c"
   "lvgl_port/lv_port_indev.c"
   "lvgl_port/lv_port_disp.c"
+  "esp_now/service_esp_now.c"
 
   INCLUDE_DIRS 
   "font/include"
@@ -58,6 +59,7 @@ idf_component_register(SRCS
   "storage_vfs/include"
   "storage_assets/include"
   "lvgl_port/include"
+  "esp_now/include"
   
 
   REQUIRES 
