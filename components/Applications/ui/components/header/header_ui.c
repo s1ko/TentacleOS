@@ -30,11 +30,11 @@ void header_ui_create(lv_obj_t * parent)
     lv_obj_set_style_radius(header, 0, 0);
     lv_obj_set_style_pad_all(header, 0, 0);
 
-    lv_obj_t * lbl_menu = lv_label_create(header);
-    lv_label_set_text(lbl_menu, "HOME MENU");
-    lv_obj_set_style_text_color(lbl_menu, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(lbl_menu, &lv_font_montserrat_14, 0);
-    lv_obj_align(lbl_menu, LV_ALIGN_LEFT_MID, 10, 0);
+    lv_obj_t * lbl_time = lv_label_create(header);
+    lv_label_set_text(lbl_time, "12:00");
+    lv_obj_set_style_text_color(lbl_time, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(lbl_time, &lv_font_montserrat_14, 0);
+    lv_obj_align(lbl_time, LV_ALIGN_LEFT_MID, 10, 0);
 
     lv_obj_t * icon_cont = lv_obj_create(header);
     lv_obj_set_size(icon_cont, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
