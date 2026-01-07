@@ -1,50 +1,90 @@
 #!/bin/bash
 
+# ==============================================================================
+# LVGL Image Conversion Automation Script (Linux/macOS Version)
+# ==============================================================================
+
+# Cores para o terminal
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}Starting LVGL Image Conversion Automation...${NC}"
+# Definição de Caminhos
+ROOT_DIR=$(pwd)
+VENV_DIR="$ROOT_DIR/lvgl-env"
+PYTHON_BIN="$VENV_DIR/bin/python3"
+SCRIPT_URL="https://raw.githubusercontent.com/lvgl/lvgl/master/scripts/LVGLImage.py"
+ASSETS_DIR="$ROOT_DIR/assets"
+TEMP_DIR="$ROOT_DIR/temp"
 
-echo -e "Step 1: Downloading scripts and requirement lists..."
-BASE_URL="https://raw.githubusercontent.com/lvgl/lvgl/master/scripts"
+echo -e "\n${YELLOW}>>> Starting LVGL Assets Automation (Linux/Mac)${NC}"
 
-wget -q -N "${BASE_URL}/LVGLImage.py"
-wget -q -N "${BASE_URL}/prerequisites-apt.txt"
-wget -q -N "${BASE_URL}/prerequisites-pip.txt"
+if [ ! -f "$PYTHON_BIN" ]; then
+  echo -e "${YELLOW}Virtual environment 'lvgl-env' not found. Creating...${NC}"
+  python3 -m venv "$VENV_DIR"
 
-echo -e "Step 3: Activating virtual environment..."
-if [ -f "lvgl-env/bin/activate" ]; then
-  source lvgl-env/bin/activate
-else
-  echo -e "${RED}Error: Virtual environment 'env' not found.${NC}"
-  echo "Please create it first with: python3 -m venv env"
-  exit 1
+  if [ $? -ne 0 ]; then
+    echo -e "${RED}Critical Error: Failed to create Python virtual environment.${NC}"
+    echo "Make sure python3-venv is installed (sudo apt install python3-venv)"
+    exit 1
+  fi
 fi
 
-echo -e "Step 4: Converting images to BIN (ARGB8888)..."
+if [ ! -f "LVGLImage.py" ]; then
+  echo "Downloading LVGLImage.py from official repository..."
+  wget -q "$SCRIPT_URL" -O "LVGLImage.py" || curl -s "$SCRIPT_URL" -o "LVGLImage.py"
+
+  if [ ! -f "LVGLImage.py" ]; then
+    echo -e "${RED}Error: Failed to download the conversion script.${NC}"
+    exit 1
+  fi
+fi
+
+echo "Checking dependencies (Pillow, PyPNG, and LZ4)..."
+"$PYTHON_BIN" -m pip install --upgrade pip -q
+"$PYTHON_BIN" -m pip install Pillow pypng lz4 -q
+
+if [ -d "$TEMP_DIR" ]; then
+  echo -e "${YELLOW}Removing existing temp directory...${NC}"
+  rm -rf "$TEMP_DIR"
+fi
+
+echo -e "${YELLOW}Copying assets to temp directory...${NC}"
+if [ ! -d "$ASSETS_DIR" ]; then
+  echo -e "${RED}Error: 'assets' directory not found!${NC}"
+  exit 1
+fi
+cp -r "$ASSETS_DIR" "$TEMP_DIR"
+
 TARGET_DIRS=("UI" "frames" "icons" "img" "label")
 
 for dir in "${TARGET_DIRS[@]}"; do
-  FULL_PATH="./assets/$dir"
+  FULL_PATH="$TEMP_DIR/$dir"
 
   if [ -d "$FULL_PATH" ]; then
-    echo -e "Processing directory: ${GREEN}$FULL_PATH${NC}"
+    count=$(find "$FULL_PATH" -maxdepth 1 -name "*.png" | wc -l)
 
-    python3 LVGLImage.py "$FULL_PATH" --ofmt BIN --cf ARGB8888 --align 1 -o "$FULL_PATH"
+    if [ "$count" -eq 0 ]; then
+      echo "Directory temp/$dir is empty or contains no .png files. Skipping..."
+      continue
+    fi
+
+    echo "---"
+    echo -e "Processing subdirectory: ${GREEN}$dir${NC}"
+
+    "$PYTHON_BIN" LVGLImage.py "$FULL_PATH" --ofmt BIN --cf ARGB8888 --align 1 -o "$FULL_PATH"
 
     if [ $? -eq 0 ]; then
-      echo -e "Cleaning up PNG files in $FULL_PATH..."
+      echo -e "${GREEN}Success!${NC} Removing original PNG files..."
       find "$FULL_PATH" -name "*.png" -type f -delete
     else
-      echo -e "${RED}Conversion failed in $FULL_PATH. Keeping PNGs.${NC}"
+      echo -e "${RED}Conversion error in $dir.${NC}"
     fi
-  else
-    echo -e "${YELLOW}Warning: Directory '$FULL_PATH' not found. Skipping...${NC}"
   fi
 done
 
-echo -e "\n${GREEN}-------------------------------${NC}"
-echo -e "${GREEN}      Automation Complete      ${NC}"
-echo -e "${GREEN}-------------------------------${NC}"
+echo -e "\n${GREEN}=======================================${NC}"
+echo -e "${GREEN}      Automation Completed Successfully      ${NC}"
+echo -e "${GREEN}=======================================${NC}\n"
+exit 0
