@@ -21,7 +21,7 @@
 #include "esp_log.h"
 #include "bluetooth_service.h"
 #include "bad_usb.h"
-
+#include "boot_ui.h"
 #include "lvgl.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
@@ -88,21 +88,31 @@ void ui_init(void)
 
 static void ui_task(void *pvParameter)
 {
-  ESP_LOGI(TAG, "UI Task iniciada.");
+    ESP_LOGI(TAG, "UI Task iniciada.");
 
-  if (ui_acquire()) {
-    ui_home_open(); 
-    ui_release();
-  }
-
-  while (1) {
     if (ui_acquire()) {
-      lv_timer_handler();
-      ui_release();
+        ui_boot_show();
+        ui_release();
     }
 
-    vTaskDelay(pdMS_TO_TICKS(10));
-  }
+    TickType_t start_tick = xTaskGetTickCount();
+    bool boot_screen_done = false;
+
+    while (1) {
+        if (ui_acquire()) {
+
+            if (!boot_screen_done && (xTaskGetTickCount() - start_tick >= pdMS_TO_TICKS(5000))) {
+                ui_home_open();
+                boot_screen_done = true;
+            }
+
+
+            lv_timer_handler();
+            ui_release();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
 static void clear_current_screen(void){
