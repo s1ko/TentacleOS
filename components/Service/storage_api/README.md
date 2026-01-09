@@ -5,19 +5,40 @@ The **Storage API** provides a unified, backend-agnostic interface for file syst
 ## Features
 
 - **Unified Interface**: Same API for internal flash (LittleFS) and external SD cards.
-- **Automatic Path Resolution**: Automatically handles mount points.
+- **Backend Abstraction**: Uses VFS layer underneath, works with any configured backend.
+- **Automatic Path Resolution**: Automatically handles mount points - use relative paths.
 - **Robustness**: Includes safety checks, recursive directory creation, and error handling.
 - **High-Level Helpers**: Easy reading/writing of strings, lines, formatted text, and CSV data.
+
+---
+
+## Architecture
+
+```
+Application Code
+      ↓
+  Storage API  ← You are here (recommended layer)
+      ↓
+   VFS Core   ← Backend abstraction
+      ↓
+  SD Card / LittleFS / SPIFFS
+```
+
+**Dependencies:**
+- Requires `vfs_core` to be initialized
+- Backend selection is done in `vfs_config.h`
 
 ---
 
 ## Initialization
 
 Before performing any operations, the storage system must be initialized.
+
 ```c
 #include "storage_init.h"
 
-// Initialize the storage system (automatically selects backend based on config)
+// Initialize the storage system
+// This calls vfs_init_auto() internally
 esp_err_t ret = storage_init();
 if (ret != ESP_OK) {
     // Handle error
@@ -35,8 +56,9 @@ storage_deinit();
 ### Default Directory Structure
 
 The storage system automatically creates a standard directory tree on initialization:
+
 ```
-/sdcard/  (or configured mount point)
+<mount_point>/  (e.g., /sdcard or /littlefs)
 ├── config/     - Configuration files
 ├── data/       - Application data
 ├── logs/       - Log files
@@ -48,8 +70,12 @@ The storage system automatically creates a standard directory tree on initializa
 ```
 
 These directories are defined in `storage_dirs.h` and can be accessed via macros:
+
 ```c
 #include "storage_dirs.h"
+
+// Macros automatically include the mount point
+// Example: STORAGE_DIR_CONFIG expands to "/sdcard/config" or "/littlefs/config"
 
 // Write to config directory
 storage_write_string(STORAGE_DIR_CONFIG "/settings.json", json_data);
@@ -58,8 +84,13 @@ storage_write_string(STORAGE_DIR_CONFIG "/settings.json", json_data);
 storage_append_formatted(STORAGE_DIR_LOGS "/system.log", "[%lu] Event\n", timestamp);
 
 // Save backup
-storage_file_copy("/data/important.dat", STORAGE_DIR_BACKUP "/important.dat");
+storage_file_copy(STORAGE_DIR_DATA "/important.dat", STORAGE_DIR_BACKUP "/important.dat");
 ```
+
+**Path Handling:**
+- All Storage API functions accept **relative paths**
+- Mount point is automatically prepended internally
+- You can use either `"/config/file.txt"` or `STORAGE_DIR_CONFIG "/file.txt"`
 
 **Note**: Directory creation is non-critical. If any directory fails to create, initialization continues successfully, and you can create directories manually later as needed.
 
@@ -81,6 +112,16 @@ Header: `storage_file.h`
 
 ### Information
 
+```c
+// File information structure
+typedef struct {
+    char path[256];           // Full path to file
+    size_t size;              // File size in bytes
+    time_t modified_time;     // Last modification time (Unix timestamp)
+    bool is_directory;        // True if this is a directory
+} storage_file_info_t;
+```
+
 | Function | Description |
 |----------|-------------|
 | `esp_err_t storage_file_get_size(const char *path, size_t *size)` | Gets file size in bytes. |
@@ -100,7 +141,7 @@ The API provides various ways to read data depending on your needs.
 ```c
 // Read entire file into a string buffer
 char buffer[128];
-storage_read_string("/data/config.txt", buffer, sizeof(buffer));
+storage_read_string("/config/settings.txt", buffer, sizeof(buffer));
 
 // Read binary data
 uint8_t data[64];
@@ -130,10 +171,10 @@ storage_read_lines("/data/list.txt", my_line_callback, NULL);
 
 ```c
 int32_t count;
-storage_read_int("/settings/boot_count", &count);
+storage_read_int("/config/boot_count", &count);
 
 float temperature;
-storage_read_float("/settings/temp_threshold", &temperature);
+storage_read_float("/config/temp_threshold", &temperature);
 ```
 
 ---
@@ -163,8 +204,8 @@ storage_write_binary("/data/blob.bin", raw_data, sizeof(raw_data));
 Similar to `printf`, useful for logs or human-readable data.
 
 ```c
-storage_write_formatted("/info.txt", "Boot count: %d\nTime: %u", count, timestamp);
-storage_append_formatted("/log.txt", "[INFO] Sensor %s: %.2f\n", sensor_name, value);
+storage_write_formatted("/logs/info.txt", "Boot count: %d\nTime: %u", count, timestamp);
+storage_append_formatted("/logs/events.log", "[INFO] Sensor %s: %.2f\n", sensor_name, value);
 ```
 
 ### CSV Support
@@ -173,7 +214,7 @@ Helper for writing structured data.
 
 ```c
 const char *row[] = {"Timestamp", "Value", "Unit"};
-storage_append_csv_row("/data/log.csv", row, 3);
+storage_append_csv_row("/data/sensors.csv", row, 3);
 // Writes: Timestamp,Value,Unit\n
 ```
 
@@ -185,11 +226,11 @@ Header: `storage_dir.h`
 
 | Function | Description |
 |----------|-------------|
-| `esp_err_t storage_dir_create(const char *path)` | Creates a directory. |
+| `esp_err_t storage_dir_create(const char *path)` | Creates a directory (recursive). |
 | `esp_err_t storage_dir_remove(const char *path)` | Removes an empty directory. |
 | `esp_err_t storage_dir_remove_recursive(const char *path)` | Removes a directory and all contents. |
-| `esp_err_t storage_dir_list(...)` | Lists directory contents via callback. |
-| `esp_err_t storage_dir_count(...)` | Counts files and subdirectories. |
+| `esp_err_t storage_dir_list(const char *path, storage_dir_callback_t cb, void *user_data)` | Lists directory contents via callback. |
+| `esp_err_t storage_dir_count(const char *path, uint32_t *file_count, uint32_t *dir_count)` | Counts files and subdirectories. |
 
 ---
 
@@ -214,24 +255,48 @@ float percent;
 storage_get_usage_percent(&percent);
 ```
 
+---
+
 ## Example Usage
 
 ```c
 #include "storage_api.h" // Includes all necessary headers
 
 void app_main() {
-    storage_init();
-
-    if (storage_file_exists("/config.json")) {
-        char config[1024];
-        storage_read_string("/config.json", config, sizeof(config));
-        // Process config...
-    } else {
-        // Create default
-        storage_write_string("/config.json", "{ \"defaults\": true }");
+    // Initialize storage (calls vfs_init_auto internally)
+    if (storage_init() != ESP_OK) {
+        printf("Storage init failed!\n");
+        return;
     }
 
-    // Log startup
-    storage_append_formatted("/boot.log", "System started at %lu\n", xTaskGetTickCount());
+    // Check for config file
+    if (storage_file_exists("/config/settings.json")) {
+        char config[1024];
+        storage_read_string("/config/settings.json", config, sizeof(config));
+        // Process config...
+    } else {
+        // Create default config
+        storage_write_string("/config/settings.json", "{ \"defaults\": true }");
+    }
+
+    // Log startup event
+    storage_append_formatted(STORAGE_DIR_LOGS "/boot.log", 
+                            "System started at %lu\n", xTaskGetTickCount());
+    
+    // Check storage health
+    float usage;
+    storage_get_usage_percent(&usage);
+    printf("Storage usage: %.1f%%\n", usage);
 }
 ```
+
+---
+
+## Best Practices
+
+1. **Always use relative paths** - Let the API handle mount points
+2. **Use directory macros** - `STORAGE_DIR_CONFIG` instead of hardcoded `"/config"`
+3. **Check return values** - All functions return `esp_err_t` for error handling
+4. **Close files properly** - Though most helpers do this automatically
+5. **Monitor storage** - Use `storage_get_usage_percent()` to prevent full disk
+6. **Use appropriate read functions** - Line-by-line for logs, binary for images
