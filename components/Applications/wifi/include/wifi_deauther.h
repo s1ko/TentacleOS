@@ -27,6 +27,7 @@ typedef enum {
 
 
 void wifi_deauther_send_deauth_frame(const wifi_ap_record_t *ap_record, deauth_frame_type_t type);
+void wifi_deauther_send_broadcast_deauth(const wifi_ap_record_t *ap_record, deauth_frame_type_t type);
 void wifi_deauther_send_raw_frame(const uint8_t *frame_buffer, int size);
 
 
