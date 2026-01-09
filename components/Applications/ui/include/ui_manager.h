@@ -18,7 +18,8 @@ typedef enum {
     SCREEN_BADUSB_CONNECT,
     SCREEN_BADUSB_RUNNING,
     SCREEN_SUBGHZ_SPECTRUM,
-    SCREEN_SETTINGS
+    SCREEN_SETTINGS,
+    SCREEN_DISPLAY_SETTINGS
     // others screens
 } screen_id_t;
 
