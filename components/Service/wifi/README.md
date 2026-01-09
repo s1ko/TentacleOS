@@ -68,6 +68,28 @@ wifi_ap_record_t* wifi_service_get_ap_record(uint16_t index);
 ```
 Retrieves a pointer to a specific scan result record. Returns `NULL` if the index is invalid.
 
+### Manual Scan Control (Advanced)
+
+These functions are intended for applications that need to manage their own scan result memory (e.g., storing a large number of APs in PSRAM).
+
+#### `wifi_service_perform_full_scan`
+```c
+esp_err_t wifi_service_perform_full_scan(void);
+```
+Performs a blocking active scan on all available channels. Automatically stops conflicting services like promiscuous mode or channel hopping.
+
+#### `wifi_service_get_scan_count`
+```c
+esp_err_t wifi_service_get_scan_count(uint16_t *count);
+```
+Retrieves the number of APs found in the last manual scan.
+
+#### `wifi_service_copy_scan_results`
+```c
+esp_err_t wifi_service_copy_scan_results(wifi_ap_record_t *buffer, uint16_t count);
+```
+Copies scan results from the Wi-Fi driver into a user-provided buffer.
+
 ### Connection & Management
 
 #### `wifi_service_connect_to_ap`
