@@ -10,6 +10,8 @@ The service handles:
 - **Scanning:** Active scanning for nearby networks.
 - **Station (STA):** Connecting to external Wi-Fi networks.
 - **Hotspot Management:** Dynamic switching of AP configuration.
+- **Promiscuous Mode:** Low-level packet sniffing and environment monitoring.
+- **Channel Hopping:** Automated cycling through Wi-Fi channels for environment monitoring.
 - **Configuration Persistence:** Loading and saving AP settings to/from `assets/config/wifi/wifi_ap.conf`.
 
 ## API Functions
@@ -85,6 +87,38 @@ Dynamically reconfigures the device's Access Point to an **Open** network with t
 - Sets `authmode` to `WIFI_AUTH_OPEN`.
 - Restarts Wi-Fi with the new configuration.
 
+### Promiscuous Mode
+
+#### `wifi_service_promiscuous_start`
+```c
+void wifi_service_promiscuous_start(wifi_promiscuous_cb_t cb, wifi_promiscuous_filter_t *filter);
+```
+Enables promiscuous mode (sniffer) with a custom callback and filter.
+- `cb`: Function to handle captured packets.
+- `filter`: Filter mask (e.g., `WIFI_PROMIS_FILTER_MASK_MGMT`).
+
+#### `wifi_service_promiscuous_stop`
+```c
+void wifi_service_promiscuous_stop(void);
+```
+Disables promiscuous mode and clears the callback.
+
+### Channel Hopping
+
+#### `wifi_service_start_channel_hopping`
+```c
+void wifi_service_start_channel_hopping(void);
+```
+Starts a background task that cycles the Wi-Fi interface through channels 1 to 13. 
+- Useful for promiscuous mode applications (e.g., deauth detection).
+- Task memory is allocated in PSRAM if available.
+
+#### `wifi_service_stop_channel_hopping`
+```c
+void wifi_service_stop_channel_hopping(void);
+```
+Stops the channel hopping task and frees associated memory resources.
+
 ### Configuration Storage
 
 #### `wifi_save_ap_config`
@@ -108,7 +142,11 @@ A static `wifi_event_handler` manages Wi-Fi and IP events:
 ### Thread Safety
 A `wifi_mutex` (Semaphore) is used to protect the scanning process (`wifi_service_scan`), preventing concurrent scan requests which could lead to resource conflicts.
 
+### Channel Hopping Task
+The channel hopping feature runs as a static FreeRTOS task. It uses `esp_wifi_set_channel` to switch channels every 250ms. To optimize internal RAM usage, both the task stack and the Task Control Block (TCB) are allocated in **PSRAM** using the `SPIRAM` capability.
+
 ### Castings & Memory Management
 - **cJSON:** Used extensively for parsing and generating configuration files.
+- **PSRAM Allocation:** Critical tasks and large buffers are allocated in PSRAM to preserve internal memory.
 - **Type Casting:** `event_data` is cast to specific event structures (e.g., `wifi_event_ap_staconnected_t*`) within handlers.
 - **String Handling:** `strncpy` is used safely with explicit null-termination to prevent buffer overflows when handling SSIDs and passwords.
