@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef BUZZER_H
 #define BUZZER_H
 
@@ -20,13 +19,15 @@
 #include "driver/ledc.h"
 
 // Pino do buzzer (configurar conforme seu hardware)
-#define BUZZER_GPIO 46
+#define BUZZER_GPIO 41
 
-// Configuração do LEDC (PWM)
-#define LEDC_CHANNEL         LEDC_CHANNEL_0
-#define LEDC_TIMER           LEDC_TIMER_0
+// ========================================
+// ⚠️ CORRIGIDO: Usa Timer 1 e Canal 1
+// para NÃO conflitar com o backlight
+// ========================================
+#define LEDC_CHANNEL         LEDC_CHANNEL_1      // ← Era 0, agora é 1
+#define LEDC_TIMER           LEDC_TIMER_1        // ← Era 0, agora é 1
 #define LEDC_MODE            LEDC_LOW_SPEED_MODE
-
 #define LEDC_DUTY_RESOLUTION LEDC_TIMER_13_BIT
 #define LEDC_FREQ            4000  // Frequência PWM inicial (Hz)
 
@@ -123,7 +124,6 @@
 
 // Protótipos das funções
 esp_err_t buzzer_init(void);
-
 void buzzer_play_tone(uint32_t freq_hz, uint32_t duration_ms);
 void buzzer_beep(void);
 void buzzer_error(void);
@@ -131,6 +131,7 @@ void buzzer_click(void);
 void buzzer_success(void);
 void buzzer_play_mario_theme(void);
 void buzzer_play_zeldas_lullaby(void);
+void buzzer_play_megalovania(void);
 void buzzer_hacker_glitch(void);
 void buzzer_notify_short(void);
 void buzzer_notify_long(void);
@@ -147,6 +148,5 @@ void buzzer_scroll_tick(void);
 void buzzer_hacker_confirm(void);
 void buzzer_flipper_granted(void);
 void buzzer_flipper_denied(void);
-
 
 #endif // BUZZER_H
