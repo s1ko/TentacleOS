@@ -19,25 +19,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_wifi_types.h"
+
 bool ap_scanner_start(void);
 wifi_ap_record_t* ap_scanner_get_results(uint16_t *count);
-/**
- * @brief Frees the memory used by the scan results.
- */
 void ap_scanner_free_results(void);
-
-/**
- * @brief Saves the current scan results to the internal flash (@assets/storage/wifi/scanned_aps.json).
- * 
- * @return true if saved successfully, false otherwise.
- */
 bool ap_scanner_save_results_to_internal_flash(void);
-
-/**
- * @brief Saves the current scan results to the SD card (/sdcard/scanned_aps.json).
- * 
- * @return true if saved successfully, false otherwise.
- */
 bool ap_scanner_save_results_to_sd_card(void);
 
 #endif // AP_SCANNER_H
