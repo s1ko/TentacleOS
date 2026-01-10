@@ -16,6 +16,7 @@
 #include "sound_settings_ui.h"
 #include "battery_settings_ui.h"
 #include "connection_settings_ui.h"
+#include "about_settings_ui.h"
 #include "ui_ble_spam.h"
 #include "ui_ble_spam_select.h"
 #include "ui_badusb_menu.h"
@@ -165,6 +166,10 @@ void ui_switch_screen(screen_id_t new_screen) {
 
       case SCREEN_CONNECTION_SETTINGS:
         ui_connection_settings_open();
+        break;
+
+      case SCREEN_ABOUT_SETTINGS:
+        ui_about_settings_open();
         break;
 
       case SCREEN_WIFI_MENU:

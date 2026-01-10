@@ -4,6 +4,7 @@
 #include "sound_settings_ui.h"
 #include "battery_settings_ui.h"
 #include "connection_settings_ui.h"
+#include "about_settings_ui.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "core/lv_group.h"
@@ -29,13 +30,12 @@ typedef struct {
 } settings_item_t;
 
 static const settings_item_t settings_list[] = {
-    {"INTERFACE",  LV_SYMBOL_KEYBOARD, SCREEN_INTERFACE_SETTINGS}, 
-    {"DISPLAY",    LV_SYMBOL_IMAGE,    SCREEN_DISPLAY_SETTINGS},
-    {"SOUND",      LV_SYMBOL_AUDIO,    SCREEN_SOUND_SETTINGS},
+    {"INTERFACE",  LV_SYMBOL_KEYBOARD,     SCREEN_INTERFACE_SETTINGS}, 
+    {"DISPLAY",    LV_SYMBOL_IMAGE,        SCREEN_DISPLAY_SETTINGS},
+    {"SOUND",      LV_SYMBOL_AUDIO,        SCREEN_SOUND_SETTINGS},
     {"BATTERY",    LV_SYMBOL_BATTERY_FULL, SCREEN_BATTERY_SETTINGS},
-    {"CONNECTION", LV_SYMBOL_WIFI,     -1},
-    {"ABOUT",      LV_SYMBOL_WARNING,  -1}
     {"CONNECTION", LV_SYMBOL_WIFI,         SCREEN_CONNECTION_SETTINGS},
+    {"ABOUT",      LV_SYMBOL_WARNING,      SCREEN_ABOUT_SETTINGS}
 };
 
 #define SETTINGS_COUNT (sizeof(settings_list) / sizeof(settings_list[0]))
@@ -66,7 +66,7 @@ static void settings_item_event_cb(lv_event_t * e) {
     lv_obj_t * btn = lv_event_get_target(e);
     lv_obj_t * label_sel = lv_event_get_user_data(e);
     lv_event_code_t code = lv_event_get_code(e);
-    int index = (int)lv_obj_get_user_data(btn);
+    int index = (int)(uintptr_t)lv_obj_get_user_data(btn);
 
     if(code == LV_EVENT_FOCUSED) {
         buzzer_scroll_tick(); 
@@ -98,7 +98,7 @@ static void create_settings_menu(lv_obj_t * parent) {
         lv_obj_t * btn = lv_btn_create(menu);
         lv_obj_set_size(btn, lv_pct(100), 35);
         lv_obj_add_style(btn, &style_btn, 0);
-        lv_obj_set_user_data(btn, (void*)i);
+        lv_obj_set_user_data(btn, (void*)(uintptr_t)i);
 
         lv_obj_t * icon = lv_label_create(btn);
         lv_label_set_text(icon, settings_list[i].symbol);
