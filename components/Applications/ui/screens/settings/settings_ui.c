@@ -1,6 +1,7 @@
 #include "settings_ui.h"
 #include "interface_settings_ui.h"
 #include "display_settings_ui.h"
+#include "sound_settings_ui.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "core/lv_group.h"
@@ -28,7 +29,7 @@ typedef struct {
 static const settings_item_t settings_list[] = {
     {"INTERFACE",  LV_SYMBOL_KEYBOARD, SCREEN_INTERFACE_SETTINGS}, 
     {"DISPLAY",    LV_SYMBOL_IMAGE,    SCREEN_DISPLAY_SETTINGS},
-    {"SOUND",      LV_SYMBOL_AUDIO,    -1},
+    {"SOUND",      LV_SYMBOL_AUDIO,    SCREEN_SOUND_SETTINGS},
     {"CONNECTION", LV_SYMBOL_WIFI,     -1},
     {"ABOUT",      LV_SYMBOL_WARNING,  -1}
 };
@@ -65,7 +66,7 @@ static void settings_item_event_cb(lv_event_t * e) {
 
     if(code == LV_EVENT_FOCUSED) {
         buzzer_scroll_tick(); 
-        lv_obj_clear_flag(label_sel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(label_sel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_scroll_to_view(btn, LV_ANIM_ON);
     }
     else if(code == LV_EVENT_DEFOCUSED) {
