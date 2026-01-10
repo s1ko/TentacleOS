@@ -98,15 +98,17 @@ static void inject_unicast_probe_req(const uint8_t *target_bssid) {
   packet[idx++] = 0x00;
   packet[idx++] = 0x00; 
 
-  uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96};
-  packet[idx++] = 0x01;
-  packet[idx++] = sizeof(rates);
-  memcpy(&packet[idx], rates, sizeof(rates)); idx += sizeof(rates);
-
-  esp_wifi_80211_tx(WIFI_IF_AP, packet, idx, false);
-  ESP_LOGI(TAG, "Injected Probe Request to force SSID reveal for PMKID");
-}
-
+      uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96};
+      packet[idx++] = 0x01;
+      packet[idx++] = sizeof(rates);
+      memcpy(&packet[idx], rates, sizeof(rates)); idx += sizeof(rates);
+  
+      for (int i = 0; i < 3; i++) {
+          esp_wifi_80211_tx(WIFI_IF_AP, packet, idx, false);
+          vTaskDelay(pdMS_TO_TICKS(2)); 
+      }
+      ESP_LOGI(TAG, "Injected Probe Request burst (3x) for SSID reveal");
+  }
 static void register_known_ap(const uint8_t *bssid) {
   for (int i = 0; i < MAX_KNOWN_APS; i++) {
     if (memcmp(known_aps[i].bssid, bssid, 6) == 0) {
