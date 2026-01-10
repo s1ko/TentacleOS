@@ -12,6 +12,7 @@
 #include "ui_ble_menu.h"
 #include "settings_ui.h"
 #include "display_settings_ui.h"
+#include "interface_settings_ui.h"
 #include "ui_ble_spam.h"
 #include "ui_ble_spam_select.h"
 #include "ui_badusb_menu.h"
@@ -145,6 +146,10 @@ void ui_switch_screen(screen_id_t new_screen) {
 
       case SCREEN_DISPLAY_SETTINGS:
         ui_display_settings_open();
+        break;
+
+      case SCREEN_INTERFACE_SETTINGS:
+        ui_interface_settings_open();
         break;
 
       case SCREEN_WIFI_MENU:

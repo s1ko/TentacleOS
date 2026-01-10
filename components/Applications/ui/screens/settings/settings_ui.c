@@ -1,4 +1,6 @@
 #include "settings_ui.h"
+#include "interface_settings_ui.h"
+#include "display_settings_ui.h"
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "core/lv_group.h"
@@ -24,7 +26,7 @@ typedef struct {
 } settings_item_t;
 
 static const settings_item_t settings_list[] = {
-    {"INTERFACE",  LV_SYMBOL_KEYBOARD, -1}, 
+    {"INTERFACE",  LV_SYMBOL_KEYBOARD, SCREEN_INTERFACE_SETTINGS}, 
     {"DISPLAY",    LV_SYMBOL_IMAGE,    SCREEN_DISPLAY_SETTINGS},
     {"SOUND",      LV_SYMBOL_AUDIO,    -1},
     {"CONNECTION", LV_SYMBOL_WIFI,     -1},
@@ -41,7 +43,7 @@ static void init_styles(void) {
     lv_style_set_border_width(&style_menu, 2);
     lv_style_set_border_color(&style_menu, lv_color_hex(COLOR_BORDER));
     lv_style_set_radius(&style_menu, 6);
-    lv_style_set_pad_all( &style_menu, 8);
+    lv_style_set_pad_all(&style_menu, 8);
     lv_style_set_pad_row(&style_menu, 8);
     
     lv_style_init(&style_btn);
@@ -63,7 +65,6 @@ static void settings_item_event_cb(lv_event_t * e) {
 
     if(code == LV_EVENT_FOCUSED) {
         buzzer_scroll_tick(); 
-        
         lv_obj_clear_flag(label_sel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_scroll_to_view(btn, LV_ANIM_ON);
     }
@@ -72,7 +73,6 @@ static void settings_item_event_cb(lv_event_t * e) {
     }
     else if(code == LV_EVENT_CLICKED || (code == LV_EVENT_KEY && lv_event_get_key(e) == LV_KEY_ENTER)) {
         buzzer_hacker_confirm(); 
-        
         if(settings_list[index].target_screen != -1) {
             ui_switch_screen(settings_list[index].target_screen);
         }
