@@ -20,6 +20,7 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "storage_write.h"
@@ -32,6 +33,20 @@
 static const char *TAG = "WIFI_SNIFFER";
 
 #define SNIFFER_BUFFER_SIZE (200 * 1024) 
+#define MAX_TRACKED_SESSIONS 16
+#define MAX_KNOWN_APS 32
+
+typedef struct {
+  uint8_t bssid[6];
+  uint8_t station[6];
+  uint32_t m1_timestamp;
+  bool has_m1;
+} handshake_session_t;
+
+typedef struct {
+  uint8_t bssid[6];
+  bool has_ssid;
+} ap_info_t;
 
 static uint8_t *pcap_buffer = NULL;
 static uint32_t buffer_offset = 0;
@@ -39,6 +54,9 @@ static uint32_t packet_count = 0;
 static bool is_sniffing = false;
 static sniff_type_t current_type = SNIFF_TYPE_RAW;
 static uint16_t sniffer_snaplen = 65535;
+
+static handshake_session_t sessions[MAX_TRACKED_SESSIONS];
+static ap_info_t known_aps[MAX_KNOWN_APS];
 
 static bool write_pcap_global_header(void) {
   if (pcap_buffer == NULL) return false;
@@ -57,7 +75,99 @@ static bool write_pcap_global_header(void) {
   return true;
 }
 
-static bool check_pmkid_presence(const uint8_t *payload, int len) {
+static void inject_unicast_probe_req(const uint8_t *target_bssid) {
+  uint8_t packet[128];
+  uint8_t mac[6];
+  esp_fill_random(mac, 6);
+  mac[0] &= 0xFC; 
+
+  int idx = 0;
+  packet[idx++] = 0x40; // Type: Probe Req
+  packet[idx++] = 0x00;
+  packet[idx++] = 0x00; 
+  packet[idx++] = 0x00;
+
+  memcpy(&packet[idx], target_bssid, 6); idx += 6; // Dest: Target AP
+  memcpy(&packet[idx], mac, 6); idx += 6;          // Src: Random
+  memcpy(&packet[idx], target_bssid, 6); idx += 6; // BSSID: Target AP
+
+  packet[idx++] = 0x00; 
+  packet[idx++] = 0x00;
+
+  // SSID Tag (Empty)
+  packet[idx++] = 0x00;
+  packet[idx++] = 0x00; 
+
+  uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96};
+  packet[idx++] = 0x01;
+  packet[idx++] = sizeof(rates);
+  memcpy(&packet[idx], rates, sizeof(rates)); idx += sizeof(rates);
+
+  esp_wifi_80211_tx(WIFI_IF_AP, packet, idx, false);
+  ESP_LOGI(TAG, "Injected Probe Request to force SSID reveal for PMKID");
+}
+
+static void register_known_ap(const uint8_t *bssid) {
+  for (int i = 0; i < MAX_KNOWN_APS; i++) {
+    if (memcmp(known_aps[i].bssid, bssid, 6) == 0) {
+      known_aps[i].has_ssid = true;
+      return;
+    }
+  }
+  // New AP, overwrite random slot
+  int idx = packet_count % MAX_KNOWN_APS;
+  memcpy(known_aps[idx].bssid, bssid, 6);
+  known_aps[idx].has_ssid = true;
+}
+
+static bool is_ap_ssid_known(const uint8_t *bssid) {
+  for (int i = 0; i < MAX_KNOWN_APS; i++) {
+    if (memcmp(known_aps[i].bssid, bssid, 6) == 0) {
+      return known_aps[i].has_ssid;
+    }
+  }
+  return false;
+}
+
+static void track_handshake(const uint8_t *bssid, const uint8_t *station, uint16_t key_info) {
+  bool is_m1 = (key_info & 0x0080) && !(key_info & 0x0100); // Ack=1, MIC=0
+  bool is_m2 = !(key_info & 0x0080) && (key_info & 0x0100); // Ack=0, MIC=1
+
+  if (is_m1) {
+    // Register M1
+    for (int i = 0; i < MAX_TRACKED_SESSIONS; i++) {
+      if (memcmp(sessions[i].bssid, bssid, 6) == 0 && memcmp(sessions[i].station, station, 6) == 0) {
+        sessions[i].has_m1 = true;
+        sessions[i].m1_timestamp = esp_timer_get_time() / 1000;
+        return;
+      }
+    }
+    // New session
+    int idx = packet_count % MAX_TRACKED_SESSIONS;
+    memcpy(sessions[idx].bssid, bssid, 6);
+    memcpy(sessions[idx].station, station, 6);
+    sessions[idx].has_m1 = true;
+    sessions[idx].m1_timestamp = esp_timer_get_time() / 1000;
+    ESP_LOGI(TAG, "Captured EAPOL M1 (Potential Handshake)");
+  } 
+  else if (is_m2) {
+    // Check for matching M1
+    for (int i = 0; i < MAX_TRACKED_SESSIONS; i++) {
+      if (sessions[i].has_m1 && 
+        memcmp(sessions[i].bssid, bssid, 6) == 0 && 
+        memcmp(sessions[i].station, station, 6) == 0) {
+
+        ESP_LOGW(TAG, "VALID HANDSHAKE CAPTURED! (M1 + M2)");
+        // Clear state to avoid spamming
+        sessions[i].has_m1 = false;
+        return;
+      }
+    }
+    ESP_LOGI(TAG, "Captured EAPOL M2 (Orphaned - Missed M1)");
+  }
+}
+
+static bool check_pmkid_presence(const uint8_t *payload, int len, const uint8_t *bssid) {
   if (len < 99) return false;
 
   int eapol_offset = 8; 
@@ -108,6 +218,9 @@ static bool check_pmkid_presence(const uint8_t *payload, int len) {
       if (rsn_cursor + 2 <= rsn_len) {
         uint16_t pmkid_count = rsn_body[rsn_cursor] | (rsn_body[rsn_cursor+1] << 8);
         if (pmkid_count > 0) {
+          if (!is_ap_ssid_known(bssid)) {
+            inject_unicast_probe_req(bssid);
+          }
           return true;
         }
       }
@@ -185,6 +298,12 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
   if (fc->to_ds && fc->from_ds) header_len = 30; 
   if (fc->subtype & 0x8) header_len += 2; 
 
+  // Capture SSID from Beacon/ProbeResponse for context
+  if (fc->type == 0 && (fc->subtype == 8 || fc->subtype == 5)) {
+    // Beacon or Probe Response
+    register_known_ap(mac_header->addr3); // Addr3 is BSSID
+  }
+
   bool save = false;
 
   switch (current_type) {
@@ -200,10 +319,27 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
         if (ppkt->rx_ctrl.sig_len > header_len + sizeof(wifi_llc_snap_t)) {
           const wifi_llc_snap_t *llc = (const wifi_llc_snap_t *)(ppkt->payload + header_len);
           if (ntohs(llc->type) == WIFI_ETHERTYPE_EAPOL) {
+
+            // Parse Key Info for Handshake Tracking
+            int eapol_offset = header_len + sizeof(wifi_llc_snap_t);
+            // EAPOL Header (4) + Key Desc Type (1) + Key Info (2)
+            if (ppkt->rx_ctrl.sig_len >= eapol_offset + 7) {
+              uint8_t *key_info_ptr = (uint8_t*)(ppkt->payload + eapol_offset + 5);
+              uint16_t key_info = (key_info_ptr[0] << 8) | key_info_ptr[1];
+
+              // Determine BSSID/Station based on direction
+              const uint8_t *bssid = (fc->from_ds) ? mac_header->addr2 : mac_header->addr1;
+              const uint8_t *station = (fc->from_ds) ? mac_header->addr1 : mac_header->addr2;
+
+              track_handshake(bssid, station, key_info);
+            }
+
             if (current_type == SNIFF_TYPE_EAPOL) {
               save = true;
             } else {
-              if (check_pmkid_presence(ppkt->payload + header_len, ppkt->rx_ctrl.sig_len - header_len)) {
+              // Check PMKID and inject Probe if SSID missing
+              const uint8_t *bssid = (fc->from_ds) ? mac_header->addr2 : mac_header->addr1;
+              if (check_pmkid_presence(ppkt->payload + header_len, ppkt->rx_ctrl.sig_len - header_len, bssid)) {
                 save = true;
                 ESP_LOGI(TAG, "PMKID Found!");
               }
@@ -281,6 +417,10 @@ bool wifi_sniffer_start(sniff_type_t type, uint8_t channel) {
   packet_count = 0;
   current_type = type;
 
+  // Clear tracking
+  memset(sessions, 0, sizeof(sessions));
+  memset(known_aps, 0, sizeof(known_aps));
+
   if (channel > 0) {
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
   } else {
@@ -339,6 +479,11 @@ bool wifi_sniffer_start_stream_sd(sniff_type_t type, uint8_t channel, const char
   rb_read_offset = 0; 
   packet_count = 0;
   current_type = type;
+
+  // Clear tracking
+  memset(sessions, 0, sizeof(sessions));
+  memset(known_aps, 0, sizeof(known_aps));
+
   is_streaming_sd = true;
   is_sniffing = true; 
 
