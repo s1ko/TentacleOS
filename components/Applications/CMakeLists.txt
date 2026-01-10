@@ -26,6 +26,7 @@ file(GLOB_RECURSE FOOTER_UI_SRCS "ui/components/footer/*.c")
 #SETINGS SCREENS
 file(GLOB_RECURSE SETTINGS_UI_SRCS "ui/screens/settings/*.c")
 file(GLOB_RECURSE DISPLAY_SETTINGS_UI_SRCS "ui/screens/display_settings/*.c")
+file(GLOB_RECURSE SOUND_SETTINGS_UI_SRCS "ui/screens/sound_settings/*.c")
 file(GLOB_RECURSE INTERFACE_SETTINGS_UI_SRCS "ui/screens/interface_settings/*.c")
 
 file(GLOB_RECURSE SUBGHZ_APP_SRCS "SubGhz/*.c")
@@ -55,6 +56,7 @@ idf_component_register(SRCS
   ${SETTINGS_UI_SRCS}
   ${DISPLAY_SETTINGS_UI_SRCS}
   ${INTERFACE_SETTINGS_UI_SRCS}
+  ${SOUND_SETTINGS_UI_SRCS}
 
   INCLUDE_DIRS 
   "play/include"
@@ -64,6 +66,7 @@ idf_component_register(SRCS
   "ui/screens/bluetooth/include"
   "ui/screens/settings/include"
   "ui/screens/display_settings/include"
+  "ui/screens/sound_settings/include"
   "ui/screens/interface_settings/include"
   "ui/screens/badusb/include"
   "bad_usb/include"
