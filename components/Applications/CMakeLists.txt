@@ -28,6 +28,7 @@ file(GLOB_RECURSE SETTINGS_UI_SRCS "ui/screens/settings/*.c")
 file(GLOB_RECURSE DISPLAY_SETTINGS_UI_SRCS "ui/screens/display_settings/*.c")
 file(GLOB_RECURSE SOUND_SETTINGS_UI_SRCS "ui/screens/sound_settings/*.c")
 file(GLOB_RECURSE INTERFACE_SETTINGS_UI_SRCS "ui/screens/interface_settings/*.c")
+file(GLOB_RECURSE BATTERY_SETTINGS_UI_SRCS "ui/screens/battery_settings/*.c")
 
 file(GLOB_RECURSE SUBGHZ_APP_SRCS "SubGhz/*.c")
 file(GLOB_RECURSE BLE_APP_SRCS "bluetooth/*.c")
@@ -57,6 +58,7 @@ idf_component_register(SRCS
   ${DISPLAY_SETTINGS_UI_SRCS}
   ${INTERFACE_SETTINGS_UI_SRCS}
   ${SOUND_SETTINGS_UI_SRCS}
+  ${BATTERY_SETTINGS_UI_SRCS}
 
   INCLUDE_DIRS 
   "play/include"
@@ -68,6 +70,7 @@ idf_component_register(SRCS
   "ui/screens/display_settings/include"
   "ui/screens/sound_settings/include"
   "ui/screens/interface_settings/include"
+  "ui/screens/battery_settings/include"
   "ui/screens/badusb/include"
   "bad_usb/include"
   "bluetooth/include"
