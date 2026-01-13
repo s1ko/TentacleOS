@@ -87,28 +87,28 @@ static void inject_unicast_probe_req(const uint8_t *target_bssid) {
   packet[idx++] = 0x00; 
   packet[idx++] = 0x00;
 
-  memcpy(&packet[idx], target_bssid, 6); idx += 6; // Dest: Target AP
-  memcpy(&packet[idx], mac, 6); idx += 6;          // Src: Random
-  memcpy(&packet[idx], target_bssid, 6); idx += 6; // BSSID: Target AP
+  memcpy(&packet[idx], target_bssid, 6); idx += 6;
+  memcpy(&packet[idx], mac, 6); idx += 6;
+  memcpy(&packet[idx], target_bssid, 6); idx += 6;
 
   packet[idx++] = 0x00; 
   packet[idx++] = 0x00;
 
-  // SSID Tag (Empty)
   packet[idx++] = 0x00;
   packet[idx++] = 0x00; 
 
-      uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96};
-      packet[idx++] = 0x01;
-      packet[idx++] = sizeof(rates);
-      memcpy(&packet[idx], rates, sizeof(rates)); idx += sizeof(rates);
-  
-      for (int i = 0; i < 3; i++) {
-          esp_wifi_80211_tx(WIFI_IF_AP, packet, idx, false);
-          vTaskDelay(pdMS_TO_TICKS(2)); 
-      }
-      ESP_LOGI(TAG, "Injected Probe Request burst (3x) for SSID reveal");
+  uint8_t rates[] = {0x82, 0x84, 0x8b, 0x96};
+  packet[idx++] = 0x01;
+  packet[idx++] = sizeof(rates);
+  memcpy(&packet[idx], rates, sizeof(rates)); idx += sizeof(rates);
+
+  for (int i = 0; i < 3; i++) {
+      esp_wifi_80211_tx(WIFI_IF_AP, packet, idx, false);
+      vTaskDelay(pdMS_TO_TICKS(2)); 
   }
+  ESP_LOGI(TAG, "Injected Probe Request burst (3x) for SSID reveal");
+}
+
 static void register_known_ap(const uint8_t *bssid) {
   for (int i = 0; i < MAX_KNOWN_APS; i++) {
     if (memcmp(known_aps[i].bssid, bssid, 6) == 0) {
@@ -116,7 +116,6 @@ static void register_known_ap(const uint8_t *bssid) {
       return;
     }
   }
-  // New AP, overwrite random slot
   int idx = packet_count % MAX_KNOWN_APS;
   memcpy(known_aps[idx].bssid, bssid, 6);
   known_aps[idx].has_ssid = true;
@@ -136,7 +135,6 @@ static void track_handshake(const uint8_t *bssid, const uint8_t *station, uint16
   bool is_m2 = !(key_info & 0x0080) && (key_info & 0x0100); // Ack=0, MIC=1
 
   if (is_m1) {
-    // Register M1
     for (int i = 0; i < MAX_TRACKED_SESSIONS; i++) {
       if (memcmp(sessions[i].bssid, bssid, 6) == 0 && memcmp(sessions[i].station, station, 6) == 0) {
         sessions[i].has_m1 = true;
@@ -144,7 +142,6 @@ static void track_handshake(const uint8_t *bssid, const uint8_t *station, uint16
         return;
       }
     }
-    // New session
     int idx = packet_count % MAX_TRACKED_SESSIONS;
     memcpy(sessions[idx].bssid, bssid, 6);
     memcpy(sessions[idx].station, station, 6);
@@ -153,14 +150,12 @@ static void track_handshake(const uint8_t *bssid, const uint8_t *station, uint16
     ESP_LOGI(TAG, "Captured EAPOL M1 (Potential Handshake)");
   } 
   else if (is_m2) {
-    // Check for matching M1
     for (int i = 0; i < MAX_TRACKED_SESSIONS; i++) {
       if (sessions[i].has_m1 && 
         memcmp(sessions[i].bssid, bssid, 6) == 0 && 
         memcmp(sessions[i].station, station, 6) == 0) {
 
         ESP_LOGW(TAG, "VALID HANDSHAKE CAPTURED! (M1 + M2)");
-        // Clear state to avoid spamming
         sessions[i].has_m1 = false;
         return;
       }
@@ -241,12 +236,14 @@ void wifi_sniffer_set_snaplen(uint16_t len) {
 static bool is_streaming_sd = false;
 static char stream_filename[128];
 static TaskHandle_t stream_task_handle = NULL;
+static StackType_t *stream_task_stack = NULL;
+static StaticTask_t *stream_task_tcb = NULL;
 static volatile uint32_t rb_read_offset = 0;
 
 static void sniffer_stream_task(void *arg) {
-  uint8_t *chunk_buf = (uint8_t *)heap_caps_malloc(4096, MALLOC_CAP_INTERNAL);
+  uint8_t *chunk_buf = (uint8_t *)heap_caps_malloc(4096, MALLOC_CAP_SPIRAM);
   if (!chunk_buf) {
-    ESP_LOGE(TAG, "Failed to alloc stream buffer");
+    ESP_LOGE(TAG, "Failed to alloc stream buffer in PSRAM");
     vTaskDelete(NULL);
     return;
   }
@@ -282,6 +279,10 @@ static void sniffer_stream_task(void *arg) {
 
   free(chunk_buf);
   stream_task_handle = NULL;
+  
+  if (stream_task_stack) { heap_caps_free(stream_task_stack); stream_task_stack = NULL; }
+  if (stream_task_tcb) { heap_caps_free(stream_task_tcb); stream_task_tcb = NULL; }
+  
   vTaskDelete(NULL);
 }
 
@@ -300,10 +301,8 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
   if (fc->to_ds && fc->from_ds) header_len = 30; 
   if (fc->subtype & 0x8) header_len += 2; 
 
-  // Capture SSID from Beacon/ProbeResponse for context
   if (fc->type == 0 && (fc->subtype == 8 || fc->subtype == 5)) {
-    // Beacon or Probe Response
-    register_known_ap(mac_header->addr3); // Addr3 is BSSID
+    register_known_ap(mac_header->addr3); 
   }
 
   bool save = false;
@@ -322,14 +321,11 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
           const wifi_llc_snap_t *llc = (const wifi_llc_snap_t *)(ppkt->payload + header_len);
           if (ntohs(llc->type) == WIFI_ETHERTYPE_EAPOL) {
 
-            // Parse Key Info for Handshake Tracking
             int eapol_offset = header_len + sizeof(wifi_llc_snap_t);
-            // EAPOL Header (4) + Key Desc Type (1) + Key Info (2)
             if (ppkt->rx_ctrl.sig_len >= eapol_offset + 7) {
               uint8_t *key_info_ptr = (uint8_t*)(ppkt->payload + eapol_offset + 5);
               uint16_t key_info = (key_info_ptr[0] << 8) | key_info_ptr[1];
 
-              // Determine BSSID/Station based on direction
               const uint8_t *bssid = (fc->from_ds) ? mac_header->addr2 : mac_header->addr1;
               const uint8_t *station = (fc->from_ds) ? mac_header->addr1 : mac_header->addr2;
 
@@ -339,7 +335,6 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
             if (current_type == SNIFF_TYPE_EAPOL) {
               save = true;
             } else {
-              // Check PMKID and inject Probe if SSID missing
               const uint8_t *bssid = (fc->from_ds) ? mac_header->addr2 : mac_header->addr1;
               if (check_pmkid_presence(ppkt->payload + header_len, ppkt->rx_ctrl.sig_len - header_len, bssid)) {
                 save = true;
@@ -419,7 +414,6 @@ bool wifi_sniffer_start(sniff_type_t type, uint8_t channel) {
   packet_count = 0;
   current_type = type;
 
-  // Clear tracking
   memset(sessions, 0, sizeof(sessions));
   memset(known_aps, 0, sizeof(known_aps));
 
@@ -482,15 +476,31 @@ bool wifi_sniffer_start_stream_sd(sniff_type_t type, uint8_t channel, const char
   packet_count = 0;
   current_type = type;
 
-  // Clear tracking
   memset(sessions, 0, sizeof(sessions));
   memset(known_aps, 0, sizeof(known_aps));
 
   is_streaming_sd = true;
   is_sniffing = true; 
 
-  if (xTaskCreate(sniffer_stream_task, "sniff_stream", 4096, NULL, 5, &stream_task_handle) != pdPASS) {
-    ESP_LOGE(TAG, "Failed to create stream task");
+  stream_task_stack = (StackType_t *)heap_caps_malloc(4096 * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
+  stream_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+
+  if (stream_task_stack && stream_task_tcb) {
+    stream_task_handle = xTaskCreateStatic(
+        sniffer_stream_task, 
+        "sniff_stream", 
+        4096, 
+        NULL, 
+        5, 
+        stream_task_stack, 
+        stream_task_tcb
+    );
+  }
+
+  if (stream_task_handle == NULL) {
+    ESP_LOGE(TAG, "Failed to create stream task in PSRAM");
+    if (stream_task_stack) { heap_caps_free(stream_task_stack); stream_task_stack = NULL; }
+    if (stream_task_tcb) { heap_caps_free(stream_task_tcb); stream_task_tcb = NULL; }
     is_streaming_sd = false;
     is_sniffing = false;
     return false;
@@ -521,6 +531,9 @@ void wifi_sniffer_stop(void) {
 
   if (stream_task_handle) {
     vTaskDelay(pdMS_TO_TICKS(200)); 
+  } else {
+    if (stream_task_stack) { heap_caps_free(stream_task_stack); stream_task_stack = NULL; }
+    if (stream_task_tcb) { heap_caps_free(stream_task_tcb); stream_task_tcb = NULL; }
   }
 
   ESP_LOGI(TAG, "Sniffer stopped. Captured %lu packets. Buffer usage: %lu bytes", packet_count, buffer_offset);
