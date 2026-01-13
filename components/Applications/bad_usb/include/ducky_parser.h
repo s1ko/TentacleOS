@@ -30,6 +30,17 @@ typedef enum {
     DUCKY_LAYOUT_ABNT2 = 1
 } ducky_layout_t;
 
+typedef enum {
+    DUCKY_OUTPUT_USB = 0,
+    DUCKY_OUTPUT_BLUETOOTH = 1
+} ducky_output_mode_t;
+
+/**
+ * @brief Sets the output mode for the script execution (USB or Bluetooth).
+ * @param mode DUCKY_OUTPUT_USB or DUCKY_OUTPUT_BLUETOOTH.
+ */
+void ducky_set_output_mode(ducky_output_mode_t mode);
+
 /**
  * @brief Parses and executes a DuckyScript string.
  * 
