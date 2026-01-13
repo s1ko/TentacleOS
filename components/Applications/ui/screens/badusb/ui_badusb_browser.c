@@ -26,6 +26,11 @@
 
 static const char *TAG = "UI_BADUSB_BROWSER";
 static lv_obj_t * screen_browser = NULL;
+static badusb_storage_t current_storage = BADUSB_STORAGE_INTERNAL;
+
+void ui_badusb_browser_set_storage(badusb_storage_t storage) {
+    current_storage = storage;
+}
 
 static void file_select_event_handler(lv_event_t * e) {
   lv_event_code_t code = lv_event_get_code(e);
@@ -37,6 +42,8 @@ static void file_select_event_handler(lv_event_t * e) {
       const char * filename = lv_list_get_button_text(lv_obj_get_parent(obj), obj);
       ESP_LOGI(TAG, "Selected script: %s", filename);
       ui_badusb_running_set_script(filename);
+      extern void ui_badusb_running_set_storage(badusb_storage_t storage);
+      ui_badusb_running_set_storage(current_storage);
       ui_switch_screen(SCREEN_BADUSB_LAYOUT);
     } else if (key == LV_KEY_ESC || key == LV_KEY_LEFT) {
       ui_switch_screen(SCREEN_BADUSB_MENU);
@@ -61,7 +68,10 @@ void ui_badusb_browser_open(void) {
   lv_obj_set_style_border_color(list, lv_palette_main(LV_PALETTE_DEEP_PURPLE), 0);
   lv_obj_set_style_border_width(list, 2, 0);
 
-  DIR* dir = opendir("/assets/storage/bad_usb_scripts/");
+  const char* path = (current_storage == BADUSB_STORAGE_INTERNAL) ? 
+                     "/assets/storage/bad_usb_scripts/" : "/sdcard/bad_usb_scripts/";
+
+  DIR* dir = opendir(path);
   if (dir) {
     struct dirent* de;
     while ((de = readdir(dir)) != NULL) {
