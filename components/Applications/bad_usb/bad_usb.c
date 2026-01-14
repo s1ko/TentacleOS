@@ -26,11 +26,16 @@
 
 static const char *TAG = "BAD_USB_MODULE";
 #define REPORT_ID_KEYBOARD 1
+#define REPORT_ID_MOUSE    2
 
 static void usb_hid_send_report(uint8_t keycode, uint8_t modifier) {
   uint8_t keycode_array[6] = {0};
   keycode_array[0] = keycode;
   tud_hid_keyboard_report(REPORT_ID_KEYBOARD, modifier, keycode_array);
+}
+
+static void usb_hid_send_mouse(int8_t x, int8_t y, uint8_t buttons, int8_t wheel) {
+    tud_hid_mouse_report(REPORT_ID_MOUSE, buttons, x, y, wheel, 0);
 }
 
 void bad_usb_wait_for_connection(void) {
@@ -44,12 +49,12 @@ void bad_usb_wait_for_connection(void) {
 
 void bad_usb_init(void) {
   busb_init();
-  hid_hal_register_callback(usb_hid_send_report, bad_usb_wait_for_connection);
+  hid_hal_register_callback(usb_hid_send_report, usb_hid_send_mouse, bad_usb_wait_for_connection);
 }
 
 void bad_usb_deinit(void) {
   ESP_LOGI(TAG, "Finalizando o modo BadUSB e desinstalando o driver...");
-  hid_hal_register_callback(NULL, NULL);
+  hid_hal_register_callback(NULL, NULL, NULL);
   ESP_ERROR_CHECK(tinyusb_driver_uninstall());
   ESP_LOGI(TAG, "Driver TinyUSB desinstalado com sucesso.");
 }
