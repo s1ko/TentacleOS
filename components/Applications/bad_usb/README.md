@@ -1,82 +1,77 @@
 # BadUSB Application Component
 
-This component implements a "BadUSB" application capable of emulating a USB HID keyboard to execute automated payloads. It includes a complete DuckyScript parser, low-level keyboard control, and support for multiple layouts (US and ABNT2).
+This component implements a modular HID application capable of emulating keyboard input to execute automated payloads. It features a 3-layer architecture that decouples script parsing, keyboard layouts, and hardware transport.
 
 ## Overview
 
 - **Location:** `components/Applications/bad_usb/`
-- **Main Headers:** 
-    - `include/bad_usb.h` (Low-level control)
-    - `include/ducky_parser.h` (Scripting engine)
-- **Dependencies:** `tinyusb`, `tusb_desc`, `storage_assets`, `storage_read`
+- **Architecture Layers:**
+    - **HID HAL:** `include/hid_hal.h` (Hardware Abstraction Layer)
+    - **HID Layouts:** `include/hid_layouts.h` (US and ABNT2 translation)
+    - **Scripting Engine:** `include/ducky_parser.h` (DuckyScript parser)
+    - **USB Driver:** `include/bad_usb.h` (TinyUSB backend)
 
-## Key Features
+## Architecture
 
-- **USB Emulation:** Acts as a standard HID Keyboard using TinyUSB.
-- **DuckyScript Support:** Parses and executes standard DuckyScript commands.
-- **Multi-Layout:** Native support for **US** and **ABNT2** (Brazilian Portuguese) keyboard layouts.
-- **Storage Integration:** Can run scripts directly from internal assets or SD Card.
-- **Progress Feedback:** Callback system to report execution progress to the UI.
+The component is organized into three distinct layers:
+
+1.  **HAL Layer (hid_hal):** Manages the registration of hardware drivers (USB, etc.) and provides a common interface for sending key reports and waiting for connections.
+2.  **Layout Layer (hid_layouts):** Translates characters and strings into HID keycodes. This layer is hardware-independent and can be reused by any driver registered in the HAL.
+3.  **Parser Layer (ducky_parser):** Processes DuckyScript files and calls the HAL or Layout functions to execute commands.
 
 ## API Reference
 
-### Initialization
+### HID HAL (hid_hal.h)
 
-#### `bad_usb_init` / `bad_usb_deinit`
+#### `hid_hal_register_callback`
 ```c
-void bad_usb_init(void);
-void bad_usb_deinit(void);
+void hid_hal_register_callback(hid_send_callback_t send_cb, hid_wait_callback_t wait_cb);
 ```
-Initializes or removes the TinyUSB driver and HID descriptors.
+Registers the functions that handle actual data transmission and connection waiting.
 
-#### `bad_usb_wait_for_connection`
+#### `hid_hal_press_key`
 ```c
-void bad_usb_wait_for_connection(void);
+void hid_hal_press_key(uint8_t keycode, uint8_t modifiers);
 ```
-Blocks execution until the device is successfully mounted by a host computer.
+Pressiona e solta uma tecla utilizando o driver registrado.
 
-### Low-Level Control
-
-#### `bad_usb_press_key`
+#### `hid_hal_wait_for_connection`
 ```c
-void bad_usb_press_key(uint8_t keycode, uint8_t modifier);
+void hid_hal_wait_for_connection(void);
 ```
-Sends a single keystroke with optional modifiers (Shift, Ctrl, Alt, GUI). Automatically handles the "press" and "release" reports.
+Blocks execution until the registered driver reports a successful connection.
+
+### Keyboard Layouts (hid_layouts.h)
 
 #### `type_string_us` / `type_string_abnt2`
 ```c
 void type_string_us(const char* str);
 void type_string_abnt2(const char* str);
 ```
-Types a full string interpreting characters according to the specified layout.
-- **ABNT2:** Handles dead keys (accents like `~`, `^`, `'`, `` ` ``) and special characters (`ç`).
+Types a full string using the specified layout logic.
 
-### DuckyScript Parser (`ducky_parser.h`)
+### USB Driver (bad_usb.h)
+
+#### `bad_usb_init` / `bad_usb_deinit`
+```c
+void bad_usb_init(void);
+void bad_usb_deinit(void);
+```
+Initializes the TinyUSB stack and registers the USB driver into the HID HAL.
+
+### DuckyScript Parser (ducky_parser.h)
 
 #### `ducky_parse_and_run`
 ```c
 void ducky_parse_and_run(const char *script);
 ```
-Parses a raw string containing DuckyScript commands and executes them line-by-line.
+Executes a DuckyScript string line-by-line.
 
-#### `ducky_run_from_assets` / `ducky_run_from_sdcard`
+#### `ducky_run_from_assets`
 ```c
 esp_err_t ducky_run_from_assets(const char *filename);
-esp_err_t ducky_run_from_sdcard(const char *path);
 ```
-Helper functions to load script files from storage and execute them.
-
-#### `ducky_set_layout`
-```c
-void ducky_set_layout(ducky_layout_t layout);
-```
-Switches the typing engine between `DUCKY_LAYOUT_US` and `DUCKY_LAYOUT_ABNT2`.
-
-#### `ducky_abort`
-```c
-void ducky_abort(void);
-```
-Sets a flag to immediately stop the current script execution.
+Loads and runs a script file from the internal storage.
 
 ## Supported DuckyScript Commands
 
@@ -93,10 +88,14 @@ Sets a flag to immediately stop the current script execution.
 | `TAB` | - | Presses Tab. |
 | `ESC` | - | Presses Escape. |
 | `F1` - `F12` | - | Function keys. |
-| ... | | Supports standard keys: `HOME`, `INSERT`, `DELETE`, `PAGEUP`, `PAGEDOWN`, Arrows, etc. |
+| `UP` / `DOWN` / `LEFT` / `RIGHT` | - | Arrow keys. |
+| `HOME` / `END` / `INSERT` / `DELETE` | - | Navigation keys. |
+| `PAGEUP` / `PAGEDOWN` | - | Page navigation. |
+| `CAPSLOCK` / `NUMLOCK` / `SCROLLLOCK` | - | Lock keys. |
+| `PRINTSCREEN` / `PAUSE` / `APP` | - | Special system keys. |
 
 ## Implementation Details
 
-- **ABNT2 Logic:** The `type_string_abnt2` function implements a state machine to handle accented characters (e.g., `á` becomes `'` + `a`) and specific keycodes for the Brazilian layout.
-- **Tokenizing:** The parser uses `strtok_r` to process lines and arguments safely.
-- **Delays:** A default delay of 10ms is added between key press/release, and 20ms between script lines to ensure the host registers inputs correctly.
+- **Decoupling:** By using the HAL, the parser does not need to know if the target is connected via USB or other means.
+- **ABNT2 Support:** Includes complex dead-key logic for Brazilian Portuguese characters like accented vowels and the "ç".
+- **Timing:** Implements standard delays between reports (10ms) and lines (20ms) for maximum compatibility with host operating systems.
