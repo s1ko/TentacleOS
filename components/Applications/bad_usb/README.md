@@ -1,6 +1,6 @@
 # BadUSB Application Component
 
-This component implements a modular HID application capable of emulating keyboard input to execute automated payloads. It features a 3-layer architecture that decouples script parsing, keyboard layouts, and hardware transport.
+This component implements a modular HID application capable of emulating keyboard and mouse input to execute automated payloads. It features a 3-layer architecture that decouples script parsing, keyboard layouts, and hardware transport.
 
 ## Overview
 
@@ -15,7 +15,7 @@ This component implements a modular HID application capable of emulating keyboar
 
 The component is organized into three distinct layers:
 
-1.  **HAL Layer (hid_hal):** Manages the registration of hardware drivers (USB, etc.) and provides a common interface for sending key reports and waiting for connections.
+1.  **HAL Layer (hid_hal):** Manages the registration of hardware drivers (USB, etc.) and provides a common interface for sending key reports, mouse movements, and waiting for connections.
 2.  **Layout Layer (hid_layouts):** Translates characters and strings into HID keycodes. This layer is hardware-independent and can be reused by any driver registered in the HAL.
 3.  **Parser Layer (ducky_parser):** Processes DuckyScript files and calls the HAL or Layout functions to execute commands.
 
@@ -25,7 +25,7 @@ The component is organized into three distinct layers:
 
 #### `hid_hal_register_callback`
 ```c
-void hid_hal_register_callback(hid_send_callback_t send_cb, hid_wait_callback_t wait_cb);
+void hid_hal_register_callback(hid_send_callback_t send_cb, hid_mouse_callback_t mouse_cb, hid_wait_callback_t wait_cb);
 ```
 Registers the functions that handle actual data transmission and connection waiting.
 
@@ -33,7 +33,25 @@ Registers the functions that handle actual data transmission and connection wait
 ```c
 void hid_hal_press_key(uint8_t keycode, uint8_t modifiers);
 ```
-Pressiona e solta uma tecla utilizando o driver registrado.
+Presses and releases a key using the registered driver (approx 10ms cycle).
+
+#### `hid_hal_mouse_move`
+```c
+void hid_hal_mouse_move(int8_t x, int8_t y);
+```
+Moves the mouse cursor relative to its current position.
+
+#### `hid_hal_mouse_click`
+```c
+void hid_hal_mouse_click(uint8_t buttons);
+```
+Performs a mouse click (press and release).
+
+#### `hid_hal_mouse_scroll`
+```c
+void hid_hal_mouse_scroll(int8_t wheel);
+```
+Scrolls the mouse wheel.
 
 #### `hid_hal_wait_for_connection`
 ```c
@@ -93,9 +111,13 @@ Loads and runs a script file from the internal storage.
 | `PAGEUP` / `PAGEDOWN` | - | Page navigation. |
 | `CAPSLOCK` / `NUMLOCK` / `SCROLLLOCK` | - | Lock keys. |
 | `PRINTSCREEN` / `PAUSE` / `APP` | - | Special system keys. |
+| `MOUSE_MOVE` | [x] [y] | Moves mouse relative to current position (-127 to 127). |
+| `MOUSE_CLICK` / `LCLICK` | - | Clicks the left mouse button. |
+| `MOUSE_RIGHT_CLICK` / `RCLICK` | - | Clicks the right mouse button. |
+| `MOUSE_SCROLL` | [amount] | Scrolls the mouse wheel. |
 
 ## Implementation Details
 
 - **Decoupling:** By using the HAL, the parser does not need to know if the target is connected via USB or other means.
 - **ABNT2 Support:** Includes complex dead-key logic for Brazilian Portuguese characters like accented vowels and the "ç".
-- **Timing:** Implements standard delays between reports (10ms) and lines (20ms) for maximum compatibility with host operating systems.
+- **Performance:** Optimized for speed using `ets_delay_us` for minimal latency between keystrokes (approx 4-5ms per key press/release cycle).
