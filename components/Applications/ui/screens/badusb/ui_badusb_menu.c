@@ -13,9 +13,7 @@
 // limitations under the License.
 
 
-#include <stdint.h>
 #include "ui_badusb_menu.h"
-#include "ui_badusb_browser.h"
 #include "ui_manager.h"
 #include "font/lv_symbol_def.h"
 #include "header_ui.h"
@@ -29,12 +27,13 @@ static lv_obj_t * screen_badusb_menu = NULL;
 
 static void menu_event_handler(lv_event_t * e) {
   lv_event_code_t code = lv_event_get_code(e);
-  badusb_storage_t storage = (badusb_storage_t)(intptr_t)lv_event_get_user_data(e);
+  lv_obj_t * obj = lv_event_get_target(e);
+  uint32_t * user_data = lv_event_get_user_data(e);
 
   if (code == LV_EVENT_KEY) {
     uint32_t key = lv_event_get_key(e);
     if (key == LV_KEY_ENTER) {
-      ui_badusb_browser_set_storage(storage);
+      // TODO: Pass user_data to browser to know which storage to open
       ui_switch_screen(SCREEN_BADUSB_BROWSER);
     } else if (key == LV_KEY_ESC) {
       ui_switch_screen(SCREEN_MENU);

@@ -15,8 +15,6 @@
 #include "ducky_parser.h"
 #include "bad_usb.h"
 #include "esp_log.h"
-// Assuming ble_hid_keyboard.h is available in include path via CMake
-#include "ble_hid_keyboard.h" 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "class/hid/hid_device.h"
@@ -31,12 +29,6 @@ static const char *TAG = "DUCKY_PARSER";
 static volatile bool s_abort_flag = false;
 static ducky_progress_cb_t s_progress_cb = NULL;
 static ducky_layout_t s_layout = DUCKY_LAYOUT_US;
-static ducky_output_mode_t s_output_mode = DUCKY_OUTPUT_USB;
-
-void ducky_set_output_mode(ducky_output_mode_t mode) {
-    s_output_mode = mode;
-    ESP_LOGI(TAG, "Output mode set to: %s", mode == DUCKY_OUTPUT_USB ? "USB" : "BLUETOOTH");
-}
 
 void ducky_set_progress_callback(ducky_progress_cb_t cb) {
     s_progress_cb = cb;
@@ -142,14 +134,6 @@ static bool is_modifier(const char* word, uint8_t* current_mod) {
   return false;
 }
 
-static void press_key_wrapper(uint8_t keycode, uint8_t modifiers) {
-    if (s_output_mode == DUCKY_OUTPUT_USB) {
-        bad_usb_press_key(keycode, modifiers);
-    } else {
-        ble_hid_send_key(keycode, modifiers);
-    }
-}
-
 static void process_line(char* line) {
   if (strlen(line) < 2 || strncmp(line, "REM", 3) == 0) return;
 
@@ -168,152 +152,10 @@ static void process_line(char* line) {
   else if (strcmp(cmd, "STRING") == 0) {
     char* next_token = strtok_r(NULL, "", &saveptr); // Get rest of string
     if (next_token) {
-        // Temporarily, we need to adapt type_string functions or manually iterate here
-        // Ideally type_string_XX should take a callback, but for now we will loop here
-        // if mode is BT, or rely on BadUSB logic if USB.
-        
-        // Simpler approach: Iterate char by char here using the wrapper?
-        // No, type_string logic is complex (ABNT2). 
-        // Best approach: If USB, call type_string. If BT, implementing a simple typer loop or refactor type_string.
-        // Let's refactor type_string usage by checking mode inside type_string functions? 
-        // No, bad_usb.c owns type_string.
-        
-        // HACK: For now, if BT mode, we only support basic ASCII typing via simple map or 
-        // we force USB mode functions to use a callback? 
-        // Since I cannot easily modify bad_usb.c to call BLE without circular dependency,
-        // I will implement a basic BT typer here.
-        
-        if (s_output_mode == DUCKY_OUTPUT_USB) {
-            if (s_layout == DUCKY_LAYOUT_ABNT2) {
-                type_string_abnt2(next_token);
-            } else {
-                type_string_us(next_token);
-            }
+        if (s_layout == DUCKY_LAYOUT_ABNT2) {
+            type_string_abnt2(next_token);
         } else {
-            // BLE Typing
-            if (s_layout == DUCKY_LAYOUT_US) {
-                for (int i = 0; next_token[i] != 0; i++) {
-                    char c = next_token[i];
-                    if (c >= 'a' && c <= 'z') press_key_wrapper(HID_KEY_A + (c - 'a'), 0);
-                    else if (c >= 'A' && c <= 'Z') press_key_wrapper(HID_KEY_A + (c - 'A'), KEYBOARD_MODIFIER_LEFTSHIFT);
-                    else if (c >= '1' && c <= '9') press_key_wrapper(HID_KEY_1 + (c - '1'), 0);
-                    else if (c == '0') press_key_wrapper(HID_KEY_0, 0);
-                    else {
-                        switch (c) {
-                            case ' ': press_key_wrapper(HID_KEY_SPACE, 0); break;
-                            case '!': press_key_wrapper(HID_KEY_1, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '@': press_key_wrapper(HID_KEY_2, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '#': press_key_wrapper(HID_KEY_3, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '$': press_key_wrapper(HID_KEY_4, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '%': press_key_wrapper(HID_KEY_5, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '^': press_key_wrapper(HID_KEY_6, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '&': press_key_wrapper(HID_KEY_7, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '*': press_key_wrapper(HID_KEY_8, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '(': press_key_wrapper(HID_KEY_9, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case ')': press_key_wrapper(HID_KEY_0, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '-': press_key_wrapper(HID_KEY_MINUS, 0); break;
-                            case '_': press_key_wrapper(HID_KEY_MINUS, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '=': press_key_wrapper(HID_KEY_EQUAL, 0); break;
-                            case '+': press_key_wrapper(HID_KEY_EQUAL, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '[': press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); break;
-                            case '{': press_key_wrapper(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case ']': press_key_wrapper(HID_KEY_BRACKET_RIGHT, 0); break;
-                            case '}': press_key_wrapper(HID_KEY_BRACKET_RIGHT, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '\\': press_key_wrapper(HID_KEY_BACKSLASH, 0); break;
-                            case '|': press_key_wrapper(HID_KEY_BACKSLASH, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case ';': press_key_wrapper(HID_KEY_SEMICOLON, 0); break;
-                            case ':': press_key_wrapper(HID_KEY_SEMICOLON, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '\'': press_key_wrapper(HID_KEY_APOSTROPHE, 0); break;
-                            case '"': press_key_wrapper(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case ',': press_key_wrapper(HID_KEY_COMMA, 0); break;
-                            case '<': press_key_wrapper(HID_KEY_COMMA, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '.': press_key_wrapper(HID_KEY_PERIOD, 0); break;
-                            case '>': press_key_wrapper(HID_KEY_PERIOD, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '/': press_key_wrapper(HID_KEY_SLASH, 0); break;
-                            case '?': press_key_wrapper(HID_KEY_SLASH, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '`': press_key_wrapper(HID_KEY_GRAVE, 0); break;
-                            case '~': press_key_wrapper(HID_KEY_GRAVE, KEYBOARD_MODIFIER_LEFTSHIFT); break;
-                            case '\n': press_key_wrapper(HID_KEY_ENTER, 0); break;
-                            case '\t': press_key_wrapper(HID_KEY_TAB, 0); break;
-                        }
-                    }
-                }
-            } else {
-                // BLE Typing (ABNT2 Layout)
-                // Mirroring logic from bad_usb.c type_string_abnt2
-                for (size_t i = 0; next_token[i] != '\0'; ++i) {
-                    uint8_t c1 = (uint8_t)next_token[i];
-                    uint8_t c2 = (uint8_t)next_token[i+1];
-
-                    // Special cases for ABNT2 quotes
-                    if (c1 == '\'') { press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); press_key_wrapper(HID_KEY_SPACE, 0); continue; }
-                    if (c1 == '"') { press_key_wrapper(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT); continue; }
-
-                    // UTF-8 Handling for Accents
-                    if ((c1 & 0xE0) == 0xC0 && c2 != '\0') {
-                        bool char_processed = true;
-                        if (c1 == 0xC3 && c2 == 0xA7) { press_key_wrapper(HID_KEY_SEMICOLON, 0); } // ç
-                        else if (c1 == 0xC3 && c2 == 0x87) { press_key_wrapper(HID_KEY_SEMICOLON, KEYBOARD_MODIFIER_LEFTSHIFT); } // Ç
-                        else if (c1 == 0xC3 && c2 == 0xA1) { press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); press_key_wrapper(HID_KEY_A, 0); } // á
-                        else if (c1 == 0xC3 && c2 == 0xA9) { press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); press_key_wrapper(HID_KEY_E, 0); } // é
-                        else if (c1 == 0xC3 && c2 == 0xAD) { press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); press_key_wrapper(HID_KEY_I, 0); } // í
-                        else if (c1 == 0xC3 && c2 == 0xB3) { press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); press_key_wrapper(HID_KEY_O, 0); } // ó
-                        else if (c1 == 0xC3 && c2 == 0xBA) { press_key_wrapper(HID_KEY_BRACKET_LEFT, 0); press_key_wrapper(HID_KEY_U, 0); } // ú
-                        else if (c1 == 0xC3 && c2 == 0xA2) { press_key_wrapper(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT); press_key_wrapper(HID_KEY_A, 0); } // â
-                        else if (c1 == 0xC3 && c2 == 0xAA) { press_key_wrapper(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT); press_key_wrapper(HID_KEY_E, 0); } // ê
-                        else if (c1 == 0xC3 && c2 == 0xB4) { press_key_wrapper(HID_KEY_APOSTROPHE, KEYBOARD_MODIFIER_LEFTSHIFT); press_key_wrapper(HID_KEY_O, 0); } // ô
-                        else if (c1 == 0xC3 && c2 == 0xA3) { press_key_wrapper(HID_KEY_APOSTROPHE, 0); press_key_wrapper(HID_KEY_A, 0); } // ã
-                        else if (c1 == 0xC3 && c2 == 0xB5) { press_key_wrapper(HID_KEY_APOSTROPHE, 0); press_key_wrapper(HID_KEY_O, 0); } // õ
-                        else if (c1 == 0xC3 && c2 == 0xA0) { press_key_wrapper(HID_KEY_BRACKET_LEFT, KEYBOARD_MODIFIER_LEFTSHIFT); press_key_wrapper(HID_KEY_A, 0); } // à
-                        else { char_processed = false; }
-
-                        if (char_processed) { i++; continue; }
-                    }
-
-                    // Standard ASCII in ABNT2
-                    uint8_t keycode = 0;
-                    uint8_t modifier = 0;
-
-                    if (c1 >= 'a' && c1 <= 'z') keycode = HID_KEY_A + (c1 - 'a');
-                    else if (c1 >= 'A' && c1 <= 'Z') { modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_A + (c1 - 'A'); }
-                    else if (c1 >= '1' && c1 <= '9') keycode = HID_KEY_1 + (c1 - '1');
-                    else if (c1 == '0') keycode = HID_KEY_0;
-                    else {
-                        switch (c1) {
-                            case '!': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_1; break;
-                            case '@': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_2; break;
-                            case '#': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_3; break;
-                            case '$': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_4; break;
-                            case '%': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_5; break;
-                            case '&': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_7; break;
-                            case '*': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_8; break;
-                            case '(': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_9; break;
-                            case ')': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_0; break;
-                            case ' ': keycode = HID_KEY_SPACE; break;
-                            case '\n': keycode = HID_KEY_ENTER; break;
-                            case '\t': keycode = HID_KEY_TAB; break;
-                            case '-': keycode = HID_KEY_MINUS; break;
-                            case '=': keycode = HID_KEY_EQUAL; break;
-                            case '_': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_MINUS; break;
-                            case '+': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_EQUAL; break;
-                            case '.': keycode = HID_KEY_PERIOD; break;
-                            case ',': keycode = HID_KEY_COMMA; break;
-                            case ';': keycode = HID_KEY_SLASH; break;
-                            case ':': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_SLASH; break;
-                            // ABNT2 / and ? are on International 1 key (0x87)
-                            case '/': keycode = 0x87; break;
-                            case '?': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = 0x87; break;
-                            case '[': modifier = KEYBOARD_MODIFIER_RIGHTALT; keycode = HID_KEY_BRACKET_LEFT; break;
-                            case '{': modifier = KEYBOARD_MODIFIER_RIGHTALT; keycode = HID_KEY_BRACKET_LEFT; modifier |= KEYBOARD_MODIFIER_LEFTSHIFT; break;
-                            case ']': modifier = KEYBOARD_MODIFIER_RIGHTALT; keycode = HID_KEY_BRACKET_RIGHT; break;
-                            case '}': modifier = KEYBOARD_MODIFIER_RIGHTALT; keycode = HID_KEY_BRACKET_RIGHT; modifier |= KEYBOARD_MODIFIER_LEFTSHIFT; break;
-                            case '\\': keycode = HID_KEY_BACKSLASH; break;
-                            case '|': modifier = KEYBOARD_MODIFIER_LEFTSHIFT; keycode = HID_KEY_BACKSLASH; break;
-                        }
-                    }
-                    if (keycode != 0) press_key_wrapper(keycode, modifier);
-                }
-            }
+            type_string_us(next_token);
         }
     }
   }
@@ -330,10 +172,13 @@ static void process_line(char* line) {
       }
     } else {
       keycode = find_key_code(cmd);
+
+      // Check for potential following modifiers or keys? 
+      // Standard DuckyScript usually puts modifiers first or implies single key press.
     }
 
     if (keycode != 0 || modifiers != 0) {
-      press_key_wrapper(keycode, modifiers);
+      bad_usb_press_key(keycode, modifiers);
     }
   }
 }

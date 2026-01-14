@@ -15,7 +15,6 @@
 
 #include "ui_badusb_running.h"
 #include "ui_manager.h"
-#include "ui_badusb_browser.h" // Needed for storage type
 #include "header_ui.h"
 #include "footer_ui.h"
 #include "lv_port_indev.h"
@@ -29,19 +28,13 @@ static const char *TAG = "UI_BADUSB_RUNNING";
 static lv_obj_t * screen_running = NULL;
 static lv_obj_t * progress_bar = NULL;
 static TaskHandle_t script_task_handle = NULL;
-static char script_name[64] = "rickroll.txt"; 
-static badusb_storage_t script_storage = BADUSB_STORAGE_INTERNAL;
+static char script_name[64] = "rickroll.txt"; // Placeholder
 
 void ui_badusb_running_set_script(const char *name) {
   if (name) {
     strncpy(script_name, name, sizeof(script_name) - 1);
     script_name[sizeof(script_name) - 1] = '\0';
   }
-}
-
-// Helper to set storage type from browser
-void ui_badusb_running_set_storage(badusb_storage_t storage) {
-    script_storage = storage;
 }
 
 static void ducky_progress_callback(int current_line, int total_lines) {
@@ -55,20 +48,12 @@ static void ducky_progress_callback(int current_line, int total_lines) {
 static void script_runner_task(void *pvParameters) {
   ESP_LOGI(TAG, "Starting script: %s", script_name);
 
-  ducky_set_progress_callback(ducky_progress_callback);
-  
-  // Ensure USB mode is set
-  ducky_set_output_mode(DUCKY_OUTPUT_USB);
+  char full_path[128];
+  snprintf(full_path, sizeof(full_path), "storage/bad_usb_scripts/%s", script_name);
 
-  if (script_storage == BADUSB_STORAGE_INTERNAL) {
-      char full_path[128];
-      snprintf(full_path, sizeof(full_path), "storage/bad_usb_scripts/%s", script_name);
-      ducky_run_from_assets(full_path);
-  } else {
-      char full_path[128];
-      snprintf(full_path, sizeof(full_path), "/sdcard/bad_usb_scripts/%s", script_name);
-      ducky_run_from_sdcard(full_path);
-  }
+  ducky_set_progress_callback(ducky_progress_callback);
+
+  ducky_run_from_assets(full_path);
 
   ducky_set_progress_callback(NULL);
 
