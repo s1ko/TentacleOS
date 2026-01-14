@@ -17,12 +17,6 @@
 
 #include <esp_err.h>
 #include <stdbool.h>
-/**
- * @brief Callback for script progress.
- * 
- * @param current_line The current line being executed.
- * @param total_lines The total number of lines in the script.
- */
 typedef void (*ducky_progress_cb_t)(int current_line, int total_lines);
 
 typedef enum {
@@ -34,54 +28,12 @@ typedef enum {
     DUCKY_OUTPUT_USB = 0,
     DUCKY_OUTPUT_BLUETOOTH = 1
 } ducky_output_mode_t;
-
-/**
- * @brief Sets the output mode for the script execution (USB or Bluetooth).
- * @param mode DUCKY_OUTPUT_USB or DUCKY_OUTPUT_BLUETOOTH.
- */
 void ducky_set_output_mode(ducky_output_mode_t mode);
-
-/**
- * @brief Parses and executes a DuckyScript string.
- * 
- * @param script The null-terminated string containing the script.
- *               Lines are separated by '\n'.
- */
 void ducky_parse_and_run(const char *script);
-
-/**
- * @brief Set a callback for execution progress.
- * 
- * @param cb The callback function.
- */
 void ducky_set_progress_callback(ducky_progress_cb_t cb);
-
-/**
- * @brief Set the keyboard layout for string typing.
- * 
- * @param layout The layout to use (US or ABNT2).
- */
 void ducky_set_layout(ducky_layout_t layout);
-
-/**
- * @brief Loads and runs a DuckyScript from the internal assets partition.
- * 
- * @param filename File name relative to the assets mount point (e.g., "scripts/payload.txt")
- * @return esp_err_t ESP_OK on success.
- */
 esp_err_t ducky_run_from_assets(const char *filename);
-
-/**
- * @brief Loads and runs a DuckyScript from the SD Card.
- * 
- * @param path Full path or relative path to the script on the SD card.
- * @return esp_err_t ESP_OK on success.
- */
 esp_err_t ducky_run_from_sdcard(const char *path);
-
-/**
- * @brief Signals the parser to stop execution immediately.
- */
 void ducky_abort(void);
 
 #endif // DUCKY_PARSER_H
