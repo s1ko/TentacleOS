@@ -53,9 +53,9 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
     cJSON *entry = cJSON_CreateObject();
 
     if (strlen(dev->name) > 0) {
-        cJSON_AddStringToObject(entry, "name", dev->name);
+      cJSON_AddStringToObject(entry, "name", dev->name);
     } else {
-        cJSON_AddStringToObject(entry, "name", "Unknown");
+      cJSON_AddStringToObject(entry, "name", "Unknown");
     }
 
     char addr_str[18];
@@ -66,6 +66,12 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
     cJSON_AddStringToObject(entry, "addr", addr_str);
     cJSON_AddNumberToObject(entry, "addr_type", dev->addr_type);
     cJSON_AddNumberToObject(entry, "rssi", dev->rssi);
+
+    if (strlen(dev->uuids) > 0) {
+      cJSON_AddStringToObject(entry, "uuids", dev->uuids);
+    } else {
+      cJSON_AddStringToObject(entry, "uuids", "");
+    }
 
     cJSON_AddItemToArray(root, entry);
   }
@@ -89,9 +95,9 @@ static bool save_results_to_path(const char *path, bool use_sd_driver) {
   } else {
     struct stat st = {0};
     if (stat("/assets/storage/ble", &st) == -1) {
-        mkdir("/assets/storage/ble", 0777);
+      mkdir("/assets/storage/ble", 0777);
     }
-    
+
     err = storage_write_string(path, json_string);
   }
 
