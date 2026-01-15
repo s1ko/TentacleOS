@@ -24,6 +24,7 @@
 
 typedef struct {
   char name[32]; 
+  char uuids[128];
   uint8_t addr[6];
   uint8_t addr_type;
   int rssi;

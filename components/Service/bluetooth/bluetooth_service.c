@@ -112,6 +112,29 @@ static int bluetooth_service_gap_event(struct ble_gap_event *event, void *arg) {
             memcpy(scan_results[i].name, fields.name, name_len);
             scan_results[i].name[name_len] = '\0';
           }
+
+          if (fields.num_uuids16 > 0) {
+            char *ptr = scan_results[i].uuids;
+            size_t remaining = sizeof(scan_results[i].uuids);
+
+            if (scan_results[i].uuids[0] != 0) {
+            } else {
+              for (int u = 0; u < fields.num_uuids16; u++) {
+                int written = snprintf(ptr, remaining, "0x%04x ", fields.uuids16[u].value);
+                if (written > 0 && written < remaining) {
+                  ptr += written;
+                  remaining -= written;
+                }
+              }
+            }
+          }
+          else if (fields.num_uuids128 > 0 && scan_results[i].uuids[0] == 0) {
+            uint8_t *u128 = fields.uuids128[0].value;
+            snprintf(scan_results[i].uuids, sizeof(scan_results[i].uuids), 
+                     "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                     u128[15], u128[14], u128[13], u128[12], u128[11], u128[10], u128[9], u128[8],
+                     u128[7], u128[6], u128[5], u128[4], u128[3], u128[2], u128[1], u128[0]);
+          }
           break;
         }
       }
@@ -120,6 +143,25 @@ static int bluetooth_service_gap_event(struct ble_gap_event *event, void *arg) {
         memcpy(scan_results[scan_count].addr, event->disc.addr.val, 6);
         scan_results[scan_count].addr_type = event->disc.addr.type;
         scan_results[scan_count].rssi = event->disc.rssi;
+        scan_results[scan_count].uuids[0] = '\0';
+
+        if (fields.num_uuids16 > 0) {
+          char *ptr = scan_results[scan_count].uuids;
+          size_t remaining = sizeof(scan_results[scan_count].uuids);
+          for (int u = 0; u < fields.num_uuids16; u++) {
+            int written = snprintf(ptr, remaining, "0x%04x ", fields.uuids16[u].value);
+            if (written > 0 && written < remaining) {
+              ptr += written;
+              remaining -= written;
+            }
+          }
+        } else if (fields.num_uuids128 > 0) {
+          uint8_t *u128 = fields.uuids128[0].value;
+          snprintf(scan_results[scan_count].uuids, sizeof(scan_results[scan_count].uuids), 
+                   "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+                   u128[15], u128[14], u128[13], u128[12], u128[11], u128[10], u128[9], u128[8],
+                   u128[7], u128[6], u128[5], u128[4], u128[3], u128[2], u128[1], u128[0]);
+        }
 
         if (fields.name != NULL) {
           int name_len = fields.name_len;
@@ -130,8 +172,7 @@ static int bluetooth_service_gap_event(struct ble_gap_event *event, void *arg) {
           scan_results[scan_count].name[0] = '\0';
         }
         scan_count++;
-      }
-      return 0;
+      }      return 0;
     }
     case BLE_GAP_EVENT_DISC_COMPLETE:
       ESP_LOGI(TAG, "Scan complete reason=%d", event->disc_complete.reason);
