@@ -53,6 +53,11 @@ static SemaphoreHandle_t ble_hs_synced_sem = NULL;
 static uint16_t connection_handles[MAX_BLE_CONNECTIONS];
 static int connection_count = 0;
 
+static ble_sniffer_cb_t sniffer_cb = NULL;
+
+static ble_tracker_cb_t tracker_cb = NULL;
+static uint8_t tracker_target_addr[6];
+
 static ble_scan_result_t scan_results[BLE_SCAN_LIST_SIZE];
 static uint16_t scan_count = 0;
 static SemaphoreHandle_t scan_sem = NULL;
@@ -95,9 +100,19 @@ static int bluetooth_service_gap_event(struct ble_gap_event *event, void *arg) {
       bluetooth_service_start_advertising();
       break;
     case BLE_GAP_EVENT_DISC: {
-      struct ble_hs_adv_fields fields;
-      int rc = ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data);
-      if (rc != 0) {
+      if (sniffer_cb) {
+        sniffer_cb(event->disc.addr.val, event->disc.addr.type, event->disc.rssi, event->disc.data, event->disc.length_data);
+        return 0;
+      }
+
+      if (tracker_cb) {
+        if (memcmp(event->disc.addr.val, tracker_target_addr, 6) == 0) {
+          tracker_cb(event->disc.rssi);
+        }
+        return 0;
+      }
+
+      struct ble_hs_adv_fields fields;            int rc = ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data);      if (rc != 0) {
         return 0;
       }
 
@@ -187,35 +202,35 @@ static int bluetooth_service_gap_event(struct ble_gap_event *event, void *arg) {
 }
 
 esp_err_t bluetooth_service_connect(const uint8_t *addr, uint8_t addr_type, int (*cb)(struct ble_gap_event *event, void *arg)) {
-    if (!ble_running) {
-        ESP_LOGE(TAG, "BLE not running");
-        return ESP_FAIL;
-    }
+  if (!ble_running) {
+    ESP_LOGE(TAG, "BLE not running");
+    return ESP_FAIL;
+  }
 
-    bluetooth_service_stop_advertising();
+  bluetooth_service_stop_advertising();
 
-    ble_addr_t target_addr;
-    memcpy(target_addr.val, addr, 6);
-    target_addr.type = addr_type;
+  ble_addr_t target_addr;
+  memcpy(target_addr.val, addr, 6);
+  target_addr.type = addr_type;
 
-    struct ble_gap_conn_params conn_params;
-    memset(&conn_params, 0, sizeof(conn_params));
-    conn_params.scan_itvl = 0x0010;
-    conn_params.scan_window = 0x0010;
-    conn_params.itvl_min = BLE_GAP_INITIAL_CONN_ITVL_MIN;
-    conn_params.itvl_max = BLE_GAP_INITIAL_CONN_ITVL_MAX;
-    conn_params.latency = 0;
-    conn_params.supervision_timeout = 0x0100;
-    conn_params.min_ce_len = 0x0010;
-    conn_params.max_ce_len = 0x0300;
+  struct ble_gap_conn_params conn_params;
+  memset(&conn_params, 0, sizeof(conn_params));
+  conn_params.scan_itvl = 0x0010;
+  conn_params.scan_window = 0x0010;
+  conn_params.itvl_min = BLE_GAP_INITIAL_CONN_ITVL_MIN;
+  conn_params.itvl_max = BLE_GAP_INITIAL_CONN_ITVL_MAX;
+  conn_params.latency = 0;
+  conn_params.supervision_timeout = 0x0100;
+  conn_params.min_ce_len = 0x0010;
+  conn_params.max_ce_len = 0x0300;
 
-    int rc = ble_gap_connect(own_addr_type, &target_addr, 30000, &conn_params, cb, NULL);
-    if (rc != 0) {
-        ESP_LOGE(TAG, "Error initiating connection: %d", rc);
-        return ESP_FAIL;
-    }
+  int rc = ble_gap_connect(own_addr_type, &target_addr, 30000, &conn_params, cb, NULL);
+  if (rc != 0) {
+    ESP_LOGE(TAG, "Error initiating connection: %d", rc);
+    return ESP_FAIL;
+  }
 
-    return ESP_OK;
+  return ESP_OK;
 }
 
 esp_err_t bluetooth_service_start_advertising(void) {
@@ -595,6 +610,69 @@ void bluetooth_service_scan(uint32_t duration_ms) {
   xSemaphoreTake(scan_sem, portMAX_DELAY); 
 
   bluetooth_service_start_advertising();
+}
+
+esp_err_t bluetooth_service_start_sniffer(ble_sniffer_cb_t cb) {
+  if (!ble_initialized || !ble_running) return ESP_FAIL;
+
+  bluetooth_service_stop_advertising();
+  sniffer_cb = cb;
+
+  struct ble_gap_disc_params disc_params;
+  memset(&disc_params, 0, sizeof(disc_params));
+  disc_params.filter_duplicates = 0; // Capture everything
+  disc_params.passive = 1; // Passive scan (don't request more data, just listen)
+  disc_params.itvl = 0; 
+  disc_params.window = 0; 
+
+  ESP_LOGI(TAG, "Starting Raw Sniffer...");
+  int rc = ble_gap_disc(own_addr_type, BLE_HS_FOREVER, &disc_params, bluetooth_service_gap_event, NULL);
+  if (rc != 0) {
+    ESP_LOGE(TAG, "Sniffer start failed: %d", rc);
+    sniffer_cb = NULL;
+    return ESP_FAIL;
+  }
+  return ESP_OK;
+}
+
+void bluetooth_service_stop_sniffer(void) {
+  if (ble_gap_disc_active()) {
+    ble_gap_disc_cancel();
+  }
+  sniffer_cb = NULL;
+  ESP_LOGI(TAG, "Sniffer stopped.");
+}
+
+esp_err_t bluetooth_service_start_tracker(const uint8_t *addr, ble_tracker_cb_t cb) {
+  if (!ble_initialized || !ble_running) return ESP_FAIL;
+
+  bluetooth_service_stop_advertising();
+  tracker_cb = cb;
+  memcpy(tracker_target_addr, addr, 6);
+
+  struct ble_gap_disc_params disc_params;
+  memset(&disc_params, 0, sizeof(disc_params));
+  disc_params.filter_duplicates = 0;
+  disc_params.passive = 1;
+  disc_params.itvl = 0;
+  disc_params.window = 0;
+
+  ESP_LOGI(TAG, "Starting RSSI Tracker...");
+  int rc = ble_gap_disc(own_addr_type, BLE_HS_FOREVER, &disc_params, bluetooth_service_gap_event, NULL);
+  if (rc != 0) {
+    ESP_LOGE(TAG, "Tracker start failed: %d", rc);
+    tracker_cb = NULL;
+    return ESP_FAIL;
+  }
+  return ESP_OK;
+}
+
+void bluetooth_service_stop_tracker(void) {
+  if (ble_gap_disc_active()) {
+    ble_gap_disc_cancel();
+  }
+  tracker_cb = NULL;
+  ESP_LOGI(TAG, "Tracker stopped.");
 }
 
 uint16_t bluetooth_service_get_scan_count(void) {

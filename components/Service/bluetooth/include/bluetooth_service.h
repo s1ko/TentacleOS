@@ -32,6 +32,10 @@ typedef struct {
   int rssi;
 } ble_scan_result_t;
 
+typedef void (*ble_sniffer_cb_t)(const uint8_t *addr, uint8_t addr_type, int rssi, const uint8_t *data, uint16_t len);
+
+typedef void (*ble_tracker_cb_t)(int rssi);
+
 esp_err_t bluetooth_service_init(void);
 esp_err_t bluetooth_service_deinit(void);
 esp_err_t bluetooth_service_start(void);
@@ -43,6 +47,13 @@ int bluetooth_service_get_connected_count(void);
 void bluetooth_service_get_mac(uint8_t *mac);
 esp_err_t bluetooth_service_set_random_mac(void);
 esp_err_t bluetooth_service_connect(const uint8_t *addr, uint8_t addr_type, int (*cb)(struct ble_gap_event *event, void *arg));
+
+esp_err_t bluetooth_service_start_sniffer(ble_sniffer_cb_t cb);
+void bluetooth_service_stop_sniffer(void);
+
+esp_err_t bluetooth_service_start_tracker(const uint8_t *addr, ble_tracker_cb_t cb);
+void bluetooth_service_stop_tracker(void);
+
 esp_err_t bluetooth_service_start_advertising(void);
 esp_err_t bluetooth_service_stop_advertising(void);
 uint8_t bluetooth_service_get_own_addr_type(void);
