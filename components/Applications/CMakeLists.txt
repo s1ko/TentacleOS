@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+file(GLOB_RECURSE UI_SRCS "ui/*.c")
 file(GLOB_RECURSE BOOT_UI_SRCS "ui/screens/boot/*.c")
 file(GLOB_RECURSE HOME_UI_SRCS "ui/screens/home/*.c")
 file(GLOB_RECURSE MENU_UI_SRCS "ui/screens/menu/*.c")
@@ -20,8 +21,12 @@ file(GLOB_RECURSE BLE_UI_SRCS "ui/screens/bluetooth/*.c")
 file(GLOB_RECURSE SUBGHZ_UI_SRCS "ui/screens/SubGhz/*.c")
 file(GLOB_RECURSE SUB_EXAMPLE_UI_SRCS "ui/screens/sub_example/*.c")
 file(GLOB_RECURSE BADUSB_UI_SRCS "ui/screens/badusb/*.c")
+
+#COMPONENTS
 file(GLOB_RECURSE HEADER_UI_SRCS "ui/components/header/*.c")
 file(GLOB_RECURSE FOOTER_UI_SRCS "ui/components/footer/*.c")
+file(GLOB_RECURSE KEYBOARD_UI_SRCS "ui/components/keyboard/*.c")
+file(GLOB_RECURSE MSGBOX_UI_SRCS "ui/components/message_box/*.c")
 
 #SETINGS SCREENS
 file(GLOB_RECURSE SETTINGS_UI_SRCS "ui/screens/settings/*.c")
@@ -32,6 +37,9 @@ file(GLOB_RECURSE BATTERY_SETTINGS_UI_SRCS "ui/screens/battery_settings/*.c")
 file(GLOB_RECURSE CONNECTION_SETTINGS_UI_SRCS "ui/screens/connection_settings/*.c")
 file(GLOB_RECURSE ABOUT_SETTINGS_UI_SRCS "ui/screens/about_settings/*.c")
 
+file(GLOB_RECURSE CONNECT_WIFI_UI_SRCS "ui/screens/connect_wifi/*.c")
+file(GLOB_RECURSE CONNECT_BLUETOOTH_UI_SRCS "ui/screens/connect_bluetooth/*.c")
+
 file(GLOB_RECURSE SUBGHZ_APP_SRCS "SubGhz/*.c")
 file(GLOB_RECURSE BLE_APP_SRCS "bluetooth/*.c")
 file(GLOB_RECURSE BADUSB_APP_SRCS "bad_usb/*.c")
@@ -40,6 +48,7 @@ file(GLOB_RECURSE WIFI_APP_SRCS "wifi/*.c")
 
 idf_component_register(SRCS 
   "play/play.c"
+  ${UI_SRCS}
   ${WIFI_APP_SRCS}
   ${ESPNOW_CHAT_APP_SRCS}
   ${BADUSB_APP_SRCS}
@@ -56,18 +65,23 @@ idf_component_register(SRCS
   ${BADUSB_UI_SRCS}
   ${HEADER_UI_SRCS}
   ${FOOTER_UI_SRCS}
+  ${KEYBOARD_UI_SRCS}
   ${SETTINGS_UI_SRCS}
   ${DISPLAY_SETTINGS_UI_SRCS}
   ${INTERFACE_SETTINGS_UI_SRCS}
   ${SOUND_SETTINGS_UI_SRCS}
   ${BATTERY_SETTINGS_UI_SRCS}
   ${CONNECTION_SETTINGS_UI_SRCS}
+  ${CONNECT_BLUETOOTH_UI_SRCS}
+  ${CONNECT_WIFI_UI_SRCS}
   ${ABOUT_SETTINGS_UI_SRCS}
+  ${MSGBOX_UI_SRCS}
 
   INCLUDE_DIRS 
   "play/include"
   "wifi/include"   
   "espnow_chat/include"
+  "ui/include"
   "ui/screens/SubGhz/include"
   "ui/screens/bluetooth/include"
   "ui/screens/settings/include"
@@ -76,6 +90,8 @@ idf_component_register(SRCS
   "ui/screens/interface_settings/include"
   "ui/screens/battery_settings/include"
   "ui/screens/connection_settings/include"
+  "ui/screens/connect_wifi/include"
+  "ui/screens/connect_bluetooth/include"
   "ui/screens/about_settings/include"
   "ui/screens/badusb/include"
   "bad_usb/include"
@@ -90,6 +106,8 @@ idf_component_register(SRCS
   "ui/screens/sub_example/include"
   "ui/components/header/include"
   "ui/components/footer/include"
+  "ui/components/keyboard/include"
+  "ui/components/message_box/include"
   
 
 
