@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "ui_manager.h"
+#include "ui_theme.h"
 #include "wifi_service.h"
 #include "esp_timer.h"
 #include "home_ui.h"
@@ -16,6 +17,8 @@
 #include "sound_settings_ui.h"
 #include "battery_settings_ui.h"
 #include "connection_settings_ui.h"
+#include "connect_wifi_ui.h"
+#include "connect_bt_ui.h"
 #include "about_settings_ui.h"
 #include "ui_ble_spam.h"
 #include "ui_ble_spam_select.h"
@@ -62,6 +65,7 @@ screen_id_t current_screen_id = SCREEN_NONE;
 void ui_init(void)
 {
   ESP_LOGI(TAG, "Inicializando UI Manager...");
+  ui_theme_init();
 
   xGuiSemaphore = xSemaphoreCreateRecursiveMutex();
   if (!xGuiSemaphore) {
@@ -92,6 +96,8 @@ void ui_init(void)
 
 static void ui_task(void *pvParameter)
 {
+
+    ui_theme_init();
     if (ui_acquire()) {
         ui_boot_show(); 
         ui_release();
@@ -166,6 +172,14 @@ void ui_switch_screen(screen_id_t new_screen) {
 
       case SCREEN_CONNECTION_SETTINGS:
         ui_connection_settings_open();
+        break;
+
+      case SCREEN_CONNECT_BLUETOOTH:
+        ui_connect_bt_open();
+        break;
+
+      case SCREEN_CONNECT_WIFI:
+        ui_connect_wifi_open();
         break;
 
       case SCREEN_ABOUT_SETTINGS:
