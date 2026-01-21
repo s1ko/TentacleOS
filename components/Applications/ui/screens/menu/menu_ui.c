@@ -2,6 +2,7 @@
 #include "home_ui.h"
 #include "header_ui.h"
 #include "footer_ui.h"
+#include "ui_theme.h"
 #include "ui_manager.h"
 #include "lv_port_indev.h"
 #include "esp_heap_caps.h"
@@ -22,14 +23,14 @@ typedef struct {
 } menu_item_t;
 
 static menu_item_t menu_data[] = {
-  {"BLUETOOTH",     {"/assets/frames/bluetooth_frame_0.bin", "/assets/frames/bluetooth_frame_1.bin", "/assets/frames/bluetooth_frame_2.bin"}, {{39,39}, {39,50}, {39,50}}, {NULL, NULL, NULL}},
-  {"BAD USB",       {"/assets/frames/files_frame_0.bin", "/assets/frames/files_frame_1.bin", "/assets/frames/files_frame_2.bin"}, {{38,38}, {39,51}, {39,51}}, {NULL, NULL, NULL}},
-  {"WIFI",          {"/assets/frames/wifi_frame_0.bin", "/assets/frames/wifi_frame_1.bin", "/assets/frames/wifi_frame_2.bin"}, {{38,38}, {39,49}, {39,49}}, {NULL, NULL, NULL}},
-  {"INFRARED",      {"/assets/frames/ir_frame_0.bin", "/assets/frames/ir_frame_1.bin", "/assets/frames/ir_frame_2.bin"}, {{38,38}, {40,51}, {40,51}}, {NULL, NULL, NULL}},
-  {"CONFIGURATION", {"/assets/frames/config_frame_0.bin", "/assets/frames/config_frame_1.bin", "/assets/frames/config_frame_2.bin"}, {{39,38}, {40,52}, {40,52}}, {NULL, NULL, NULL}},
-  {"NFC",           {"/assets/frames/nfc_frame_0.bin", "/assets/frames/nfc_frame_1.bin", "/assets/frames/nfc_frame_2.bin"}, {{38,38}, {41,50}, {41,50}}, {NULL, NULL, NULL}},
+  {"BLUETOOTH",      {"/assets/frames/bluetooth_frame_0.bin", "/assets/frames/bluetooth_frame_1.bin", "/assets/frames/bluetooth_frame_2.bin"}, {{39,39}, {39,50}, {39,50}}, {NULL, NULL, NULL}},
+  {"BAD USB",        {"/assets/frames/files_frame_0.bin", "/assets/frames/files_frame_1.bin", "/assets/frames/files_frame_2.bin"}, {{38,38}, {39,51}, {39,51}}, {NULL, NULL, NULL}},
+  {"WIFI",           {"/assets/frames/wifi_frame_0.bin", "/assets/frames/wifi_frame_1.bin", "/assets/frames/wifi_frame_2.bin"}, {{38,38}, {39,49}, {39,49}}, {NULL, NULL, NULL}},
+  {"INFRARED",       {"/assets/frames/ir_frame_0.bin", "/assets/frames/ir_frame_1.bin", "/assets/frames/ir_frame_2.bin"}, {{38,38}, {40,51}, {40,51}}, {NULL, NULL, NULL}},
+  {"CONFIGURATION",  {"/assets/frames/config_frame_0.bin", "/assets/frames/config_frame_1.bin", "/assets/frames/config_frame_2.bin"}, {{39,38}, {40,52}, {40,52}}, {NULL, NULL, NULL}},
+  {"NFC",            {"/assets/frames/nfc_frame_0.bin", "/assets/frames/nfc_frame_1.bin", "/assets/frames/nfc_frame_2.bin"}, {{38,38}, {41,50}, {41,50}}, {NULL, NULL, NULL}},
   {"RADIO FREQUENCY", {"/assets/frames/radio_frame_0.bin", "/assets/frames/radio_frame_1.bin", "/assets/frames/radio_frame_2.bin"}, {{38,38}, {41,50}, {41,50}}, {NULL, NULL, NULL}},
-  {"BROWSE FILES", {"/assets/frames/files_frame_0.bin", "/assets/frames/files_frame_1.bin", "/assets/frames/files_frame_2.bin"}, {{38,38}, {39,51}, {39,51}}, {NULL, NULL, NULL}},
+  {"BROWSE FILES",   {"/assets/frames/files_frame_0.bin", "/assets/frames/files_frame_1.bin", "/assets/frames/files_frame_2.bin"}, {{38,38}, {39,51}, {39,51}}, {NULL, NULL, NULL}},
 };
 
 #define MENU_ITEM_COUNT (sizeof(menu_data) / sizeof(menu_data[0]))
@@ -146,11 +147,15 @@ static void menu_update_ui(void) {
   lv_anim_set_duration(&at, 400);
   lv_anim_set_exec_cb(&at, (lv_anim_exec_xcb_t)lv_obj_set_style_opa);
   lv_anim_start(&at);
+  
   lv_label_set_text_fmt(menu_indicator_label, LV_SYMBOL_LEFT "   %s   " LV_SYMBOL_RIGHT, menu_data[menu_index].name);
+  lv_obj_set_style_text_color(menu_indicator_label, current_theme.text_main, 0);
 
   for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-    lv_obj_set_style_bg_opa(menu_dots[i], (i == menu_index) ? LV_OPA_COVER : LV_OPA_40, 0);
-    lv_obj_set_size(menu_dots[i], (i == menu_index) ? 8 : 4, (i == menu_index) ? 8 : 4);
+    bool is_selected = (i == menu_index);
+    lv_obj_set_style_bg_color(menu_dots[i], is_selected ? current_theme.border_accent : current_theme.text_main, 0);
+    lv_obj_set_style_bg_opa(menu_dots[i], is_selected ? LV_OPA_COVER : LV_OPA_40, 0);
+    lv_obj_set_size(menu_dots[i], is_selected ? 8 : 4, is_selected ? 8 : 4);
   }
 
   for(int i = 0; i < MENU_ITEM_COUNT; i++) {
@@ -159,39 +164,37 @@ static void menu_update_ui(void) {
 }
 
 static void menu_event_cb(lv_event_t * e) {
-  if (lv_event_get_code(e) != LV_EVENT_KEY) return;
-  uint32_t key = lv_event_get_key(e);
+    if (lv_event_get_code(e) != LV_EVENT_KEY) return;
+    uint32_t key = lv_event_get_key(e);
 
-  if (key == LV_KEY_RIGHT) {
-    buzzer_scroll_tick();
-    menu_index = (menu_index + 1) % MENU_ITEM_COUNT;
-    menu_update_ui();
-  } else if (key == LV_KEY_LEFT) {
-    buzzer_scroll_tick();
-    menu_index = (menu_index == 0) ? MENU_ITEM_COUNT - 1 : menu_index - 1;
-    menu_update_ui();
-  } else if (key == LV_KEY_ESC) {
-    buzzer_click();
-    ui_switch_screen(SCREEN_HOME);
-  } else if (key == LV_KEY_ENTER) {
-    buzzer_hacker_confirm();
-    ESP_LOGI(TAG, "ENTRANDO NO SISTEMA: %s", menu_data[menu_index].name);
-    switch(menu_index) {
-      case 0: ui_switch_screen(SCREEN_BLE_MENU); break;
-      case 1: ui_switch_screen(SCREEN_BADUSB_MENU); break;
-      case 2: ui_switch_screen(SCREEN_WIFI_MENU); break;
-      case 3: break;
-      case 4: ui_switch_screen(SCREEN_SETTINGS); break;
-      case 6: ui_switch_screen(SCREEN_SUBGHZ_SPECTRUM); break;
-      default: ESP_LOGW(TAG, "!!!Nenhuma tela definida!!!"); break;
+    if (key == LV_KEY_RIGHT) {
+        buzzer_play_sound_file("buzzer_scroll_tick");
+        menu_index = (menu_index + 1) % MENU_ITEM_COUNT;
+        menu_update_ui();
+    } else if (key == LV_KEY_LEFT) {
+        buzzer_play_sound_file("buzzer_scroll_tick");
+        menu_index = (menu_index == 0) ? MENU_ITEM_COUNT - 1 : menu_index - 1;
+        menu_update_ui();
+    } else if (key == LV_KEY_ESC) {
+        buzzer_play_sound_file("buzzer_click");
+        ui_switch_screen(SCREEN_HOME);
+    } else if (key == LV_KEY_ENTER) {
+        buzzer_play_sound_file("buzzer_hacker_confirm");
+        switch(menu_index) {
+            case 0: ui_switch_screen(SCREEN_BLE_MENU); break;
+            case 1: ui_switch_screen(SCREEN_BADUSB_MENU); break;
+            case 2: ui_switch_screen(SCREEN_WIFI_MENU); break;
+            case 4: ui_switch_screen(SCREEN_SETTINGS); break;
+            case 6: ui_switch_screen(SCREEN_SUBGHZ_SPECTRUM); break;
+            default: ESP_LOGW(TAG, "NOT DEFINED"); break;
+        }
     }
-  }
 }
 
 void ui_menu_open(void) {
   if (menu_screen) { lv_obj_del(menu_screen); menu_screen = NULL; }
   menu_screen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(menu_screen, lv_color_black(), 0);
+  lv_obj_set_style_bg_color(menu_screen, current_theme.screen_base, 0);
   lv_obj_remove_flag(menu_screen, LV_OBJ_FLAG_SCROLLABLE);
 
   for(int i = 0; i < MENU_ITEM_COUNT; i++) {
@@ -217,7 +220,6 @@ void ui_menu_open(void) {
   for (int i = 0; i < MENU_ITEM_COUNT; i++) {
     menu_dots[i] = lv_obj_create(dots_cont);
     lv_obj_set_style_radius(menu_dots[i], LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(menu_dots[i], lv_color_white(), 0);
     lv_obj_set_style_border_width(menu_dots[i], 0, 0);
     lv_obj_set_size(menu_dots[i], 4, 4);
     lv_obj_remove_flag(menu_dots[i], LV_OBJ_FLAG_SCROLLABLE);
@@ -225,7 +227,6 @@ void ui_menu_open(void) {
 
   menu_indicator_label = lv_label_create(menu_screen);
   lv_obj_align(menu_indicator_label, LV_ALIGN_BOTTOM_MID, 0, -55);
-  lv_obj_set_style_text_color(menu_indicator_label, lv_color_white(), 0);
 
   menu_update_ui();
   lv_obj_add_event_cb(menu_screen, menu_event_cb, LV_EVENT_KEY, NULL);
