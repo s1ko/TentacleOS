@@ -1,36 +1,109 @@
-// Copyright (c) 2025 HIGH CODE LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-
 #include "buzzer.h"
 #include "driver/ledc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "cJSON.h"
+#include "storage_assets.h"
+#include "esp_log.h"
+#include <sys/stat.h>
+#include <string.h>
 
-// Inicializa o LEDC para controle do buzzer
+static const char *TAG = "BUZZER_PLAYER";
+
+#define SOUND_PATH_PREFIX "/assets/config/buzzer/sounds/"
+#define SOUND_EXTENSION ".conf"
+#define CONFIG_PATH "/assets/config/buzzer/buzzer.conf"
+
+static int g_buzzer_volume = 3;
+static bool g_buzzer_enabled = true;
+
+void buzzer_save_config(void) {
+    if (!storage_assets_is_mounted()) return;
+
+    mkdir("/assets/config", 0777);
+    mkdir("/assets/config/buzzer", 0777);
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "volume", g_buzzer_volume);
+    cJSON_AddNumberToObject(root, "enabled", g_buzzer_enabled ? 1 : 0);
+    
+    char *out = cJSON_PrintUnformatted(root);
+    if (out) {
+        FILE *f = fopen(CONFIG_PATH, "w");
+        if (f) {
+            fputs(out, f);
+            fclose(f);
+            ESP_LOGI(TAG, "Config do buzzer salva.");
+        } else {
+            ESP_LOGE(TAG, "Erro ao abrir %s para escrita", CONFIG_PATH);
+        }
+        cJSON_free(out);
+    }
+    cJSON_Delete(root);
+}
+
+void buzzer_load_config(void) {
+    if (!storage_assets_is_mounted()) return;
+
+    FILE *f = fopen(CONFIG_PATH, "r");
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long fsize = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        char *data = malloc(fsize + 1);
+        if (data) {
+            fread(data, 1, fsize, f);
+            data[fsize] = 0;
+            cJSON *root = cJSON_Parse(data);
+            if (root) {
+                cJSON *vol = cJSON_GetObjectItem(root, "volume");
+                cJSON *en = cJSON_GetObjectItem(root, "enabled");
+                if (cJSON_IsNumber(vol)) g_buzzer_volume = vol->valueint;
+                if (cJSON_IsNumber(en)) g_buzzer_enabled = (en->valueint == 1);
+                cJSON_Delete(root);
+            }
+            free(data);
+        }
+        fclose(f);
+    } else {
+        ESP_LOGW(TAG, "Arquivo de config do buzzer não encontrado, usando padrões.");
+    }
+}
+
+void buzzer_set_volume(int volume) {
+    if (volume < 0) volume = 0;
+    if (volume > 5) volume = 5;
+    g_buzzer_volume = volume;
+    buzzer_save_config();
+}
+
+void buzzer_set_enabled(bool enabled) {
+    g_buzzer_enabled = enabled;
+    buzzer_save_config();
+}
+
+int buzzer_get_volume(void) {
+    return g_buzzer_volume;
+}
+
+bool buzzer_is_enabled(void) {
+    return g_buzzer_enabled;
+}
+
 esp_err_t buzzer_init(void) {
+    buzzer_load_config();
+    
     ledc_timer_config_t timer_conf = {
-        .duty_resolution = LEDC_DUTY_RESOLUTION, // 13 bits
-        .freq_hz = LEDC_FREQ,                    // freq inicial (pode ser alterada dinamicamente)
+        .duty_resolution = LEDC_DUTY_RESOLUTION,
+        .freq_hz = LEDC_FREQ,
         .speed_mode = LEDC_MODE,
         .timer_num = LEDC_TIMER,
         .clk_cfg = LEDC_AUTO_CLK
     };
     esp_err_t err = ledc_timer_config(&timer_conf);
-    if (err != ESP_OK) {
-        return err;
-    }
+    if (err != ESP_OK) return err;
+
     ledc_channel_config_t ch_conf = {
         .channel    = LEDC_CHANNEL,
         .duty       = 0,
@@ -39,287 +112,77 @@ esp_err_t buzzer_init(void) {
         .hpoint     = 0,
         .timer_sel  = LEDC_TIMER
     };
-    err = ledc_channel_config(&ch_conf);
-    return err;
+    return ledc_channel_config(&ch_conf);
 }
 
-// Toca um tom na frequência (Hz) por duração (ms)
 void buzzer_play_tone(uint32_t freq_hz, uint32_t duration_ms) {
-    if (freq_hz > 0) {
-        // Ajusta a frequência do timer LEDC e aplica 50% de duty
+    if (g_buzzer_enabled && g_buzzer_volume > 0 && freq_hz > 0) {
+        uint32_t max_duty_val = (1 << LEDC_DUTY_RESOLUTION) - 1;
+
+        uint32_t duty = 0;
+        switch (g_buzzer_volume) {
+            case 5: duty = max_duty_val / 2;
+                break;
+            case 4: duty = max_duty_val / 8;
+                break;
+            case 3: duty = max_duty_val / 32;
+                break;
+            case 2: duty = max_duty_val / 128; 
+                break;
+            case 1: duty = max_duty_val / 512;
+                break;
+            default: duty = 0;
+        }
+        
         ledc_set_freq(LEDC_MODE, LEDC_TIMER, freq_hz);
-        uint32_t duty = (1 << (LEDC_DUTY_RESOLUTION - 1)); // duty = metade do máximo
         ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, duty);
         ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
     }
-    // Toca pelo tempo especificado
-    vTaskDelay(duration_ms / portTICK_PERIOD_MS);
-    // Pára o tom (duty = 0 -> silêncio)
+    
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    
     ledc_set_duty(LEDC_MODE, LEDC_CHANNEL, 0);
     ledc_update_duty(LEDC_MODE, LEDC_CHANNEL);
 }
 
-// Efeito: beep simples
-void buzzer_beep(void) {
-    buzzer_play_tone(NOTE_B5, 100);
-}
+esp_err_t buzzer_play_sound_file(const char *sound_name) {
+    if (sound_name == NULL) return ESP_ERR_INVALID_ARG;
 
-// Efeito: sinal de erro (dois tons descendentes)
-void buzzer_error(void) {
-    buzzer_play_tone(NOTE_E5, 150);
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-    buzzer_play_tone(NOTE_C5, 150);
-}
+    char full_path[128];
+    snprintf(full_path, sizeof(full_path), "%s%s%s", SOUND_PATH_PREFIX, sound_name, SOUND_EXTENSION);
 
-// Efeito: clique rápido
-void buzzer_click(void) {
-    buzzer_play_tone(NOTE_G5, 50);
-}
+    FILE *f = fopen(full_path, "r");
+    if (f == NULL) return ESP_ERR_NOT_FOUND;
 
-// Efeito: sinal de sucesso (sequência ascendente)
-void buzzer_success(void) {
-    buzzer_play_tone(NOTE_C5, 100);
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-    buzzer_play_tone(NOTE_D5, 100);
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-    buzzer_play_tone(NOTE_E5, 100);
-}
-// Efeito: Hacker Glitch (trêmulo e agudo)
-void buzzer_hacker_glitch(void) {
-    for (int i = 0; i < 5; i++) {
-        buzzer_play_tone(NOTE_DS6, 30);
-        vTaskDelay(pdMS_TO_TICKS(10));
-        buzzer_play_tone(NOTE_GS6, 30);
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
-}
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-// Efeito: Notificação curta
-void buzzer_notify_short(void) {
-    buzzer_play_tone(NOTE_G5, 80);
-    vTaskDelay(pdMS_TO_TICKS(50));
-    buzzer_play_tone(NOTE_C6, 100);
-}
+    char *json_data = malloc(fsize + 1);
+    if (json_data) {
+        fread(json_data, 1, fsize, f);
+        json_data[fsize] = 0;
+        fclose(f);
 
-// Efeito: Notificação longa
-void buzzer_notify_long(void) {
-    buzzer_play_tone(NOTE_E5, 150);
-    vTaskDelay(pdMS_TO_TICKS(50));
-    buzzer_play_tone(NOTE_G5, 150);
-    vTaskDelay(pdMS_TO_TICKS(50));
-    buzzer_play_tone(NOTE_C6, 300);
-}
-
-// Efeito: Alarme (oscilante)
-void buzzer_alarm(void) {
-    for (int i = 0; i < 3; i++) {
-        buzzer_play_tone(NOTE_C5, 250);
-        buzzer_play_tone(NOTE_G4, 250);
-    }
-}
-
-// Efeito: Alerta crítico (rápido e alto)
-void buzzer_critical_alert(void) {
-    for (int i = 0; i < 4; i++) {
-        buzzer_play_tone(NOTE_B5, 100);
-        vTaskDelay(pdMS_TO_TICKS(50));
-    }
-}
-
-// Efeito: Radar ping (eco sonoro)
-void buzzer_radar_ping(void) {
-    buzzer_play_tone(NOTE_G4, 100);
-    vTaskDelay(pdMS_TO_TICKS(300));
-    buzzer_play_tone(NOTE_E4, 80);
-}
-
-// Efeito: Digital pulse (tecnológico)
-void buzzer_digital_pulse(void) {
-    buzzer_play_tone(NOTE_C6, 40);
-    vTaskDelay(pdMS_TO_TICKS(20));
-    buzzer_play_tone(NOTE_E6, 40);
-    vTaskDelay(pdMS_TO_TICKS(20));
-    buzzer_play_tone(NOTE_G6, 40);
-}
-
-// Efeito: Acesso autorizado (positivo e rápido)
-void buzzer_access_granted(void) {
-    buzzer_play_tone(NOTE_A4, 100);
-    vTaskDelay(pdMS_TO_TICKS(50));
-    buzzer_play_tone(NOTE_C5, 120);
-}
-
-// Efeito: Acesso negado (tom de erro com fade)
-void buzzer_access_denied(void) {
-    buzzer_play_tone(NOTE_DS4, 200);
-    buzzer_play_tone(NOTE_D4, 200);
-    buzzer_play_tone(NOTE_CS4, 200);
-}
-
-// Efeito: Scanner looping (repetição digital)
-void buzzer_scanner_loop(void) {
-    for (int i = 0; i < 3; i++) {
-        buzzer_play_tone(NOTE_C4 + (i * 50), 50);
-        vTaskDelay(pdMS_TO_TICKS(30));
-    }
-}
-
-// Efeito: Boot digital (estilo inicialização do sistema)
-void buzzer_boot_sequence(void) {
-    buzzer_play_tone(NOTE_C5, 80);
-    vTaskDelay(pdMS_TO_TICKS(50));
-    buzzer_play_tone(NOTE_E5, 60);
-    vTaskDelay(pdMS_TO_TICKS(30));
-    buzzer_play_tone(NOTE_G5, 100);
-}
-
-// Efeito: System tick (pulsos rápidos de sistema)
-void buzzer_system_tick(void) {
-    for (int i = 0; i < 3; i++) {
-        buzzer_play_tone(NOTE_C6, 25);
-        vTaskDelay(pdMS_TO_TICKS(40));
-    }
-}
-
-// Efeito: Menu scroll (scrolling sonoro)
-void buzzer_scroll_tick(void) {
-    buzzer_play_tone(NOTE_C6, 20);
-    vTaskDelay(pdMS_TO_TICKS(20));
-    buzzer_play_tone(NOTE_E6, 20);
-}
-
-// Efeito: Hacker confirm (tom sintético de confirmação)
-void buzzer_hacker_confirm(void) {
-    buzzer_play_tone(NOTE_E5, 60);
-    vTaskDelay(pdMS_TO_TICKS(30));
-    buzzer_play_tone(NOTE_G5, 100);
-}
-
-// Efeito: Flipper access granted (melodia curta estilo Flipper)
-void buzzer_flipper_granted(void) {
-    buzzer_play_tone(NOTE_A4, 60);
-    buzzer_play_tone(NOTE_C5, 60);
-    buzzer_play_tone(NOTE_E5, 120);
-}
-
-// Efeito: Flipper denied (negação com tom quebrado)
-void buzzer_flipper_denied(void) {
-    buzzer_play_tone(NOTE_DS4, 80);
-    buzzer_play_tone(NOTE_C4, 50);
-    vTaskDelay(pdMS_TO_TICKS(80));
-    buzzer_play_tone(NOTE_B3, 120);
-}
-
-// Música: Tema do Super Mario Bros (Overworld)
-void buzzer_play_mario_theme(void) {
-    const uint16_t melody[] = {
-        NOTE_E7, NOTE_E7, 0, NOTE_E7,
-        0, NOTE_C7, NOTE_E7, 0,
-        NOTE_G7, 0, 0,  0,
-        NOTE_G6, 0, 0, 0,
-        NOTE_C7, 0, 0, NOTE_G6,
-        0, 0, NOTE_E6, 0,
-        0, NOTE_A6, 0, NOTE_B6,
-        0, NOTE_AS6, NOTE_A6, 0,
-        NOTE_G6, NOTE_E7, NOTE_G7,
-        NOTE_A7, 0, NOTE_F7, NOTE_G7,
-        0, NOTE_E7, 0, NOTE_C7,
-        NOTE_D7, NOTE_B6, 0, 0
-    };
-    const uint8_t tempo[] = {
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        9, 9, 9,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        9, 9, 9,
-        12, 12, 12, 12,
-        12, 12, 12, 12,
-        12, 12, 12, 12
-    };
-    int notes = sizeof(melody)/sizeof(melody[0]);
-    for (int i = 0; i < notes; i++) {
-        uint16_t note = melody[i];
-        uint32_t dur = 1000 / tempo[i];
-        if (note == 0) {
-            // Pausa (repouso)
-            vTaskDelay(dur / portTICK_PERIOD_MS);
-        } else {
-            buzzer_play_tone(note, dur);
+        cJSON *root = cJSON_Parse(json_data);
+        if (root) {
+            cJSON *notes = cJSON_GetObjectItem(root, "notes");
+            if (cJSON_IsArray(notes)) {
+                int array_size = cJSON_GetArraySize(notes);
+                for (int i = 0; i < array_size; i++) {
+                    cJSON *item = cJSON_GetArrayItem(notes, i);
+                    uint32_t freq = cJSON_GetObjectItem(item, "freq")->valueint;
+                    uint32_t duration = cJSON_GetObjectItem(item, "duration")->valueint;
+                    buzzer_play_tone(freq, duration);
+                }
+            }
+            cJSON_Delete(root);
         }
-        // Pausa extra entre notas (~30% do tempo da nota)
-        vTaskDelay((dur * 3 / 10) / portTICK_PERIOD_MS);
+        free(json_data);
+    } else {
+        fclose(f);
+        return ESP_ERR_NO_MEM;
     }
+
+    return ESP_OK;
 }
-
-// Música: Zelda's Lullaby (Ocarina of Time)
-void buzzer_play_zeldas_lullaby(void) {
-    const uint16_t melody[] = {
-        NOTE_B3, NOTE_D4, NOTE_A3, NOTE_G3, NOTE_A3, NOTE_B3, NOTE_D4, NOTE_A3,
-        NOTE_B3, NOTE_D4, NOTE_A4, NOTE_G4, NOTE_D4, NOTE_C4, NOTE_B3, NOTE_A3,
-        NOTE_B3, NOTE_D4, NOTE_A3, NOTE_G3, NOTE_A3, NOTE_B3, NOTE_D4, NOTE_A3,
-        NOTE_B3, NOTE_D4, NOTE_A4, NOTE_G4, NOTE_D5
-    };
-    const uint16_t durations[] = {
-        1000, 500, 1000, 250, 250, 1000, 500, 1500,
-        1000, 500, 1000, 500, 1000, 250, 250, 1500,
-        1000, 500, 1000, 250, 250, 1000, 500, 1500,
-        1000, 500, 1000, 500, 1500
-    };
-    int notes = sizeof(melody)/sizeof(melody[0]);
-    for (int i = 0; i < notes; i++) {
-        uint16_t note = melody[i];
-        uint32_t dur = durations[i];
-        buzzer_play_tone(note, dur);
-        // Pausa extra (~30% do tempo da nota)
-        vTaskDelay((dur * 3 / 10) / portTICK_PERIOD_MS);
-    }
-}
-
-void buzzer_play_megalovania(void) {
-    const uint16_t melody[] = {
-        NOTE_D5, NOTE_D5, NOTE_A4, NOTE_D5, NOTE_A4, NOTE_D5, NOTE_A4, 0,
-        NOTE_F5, NOTE_F5, NOTE_C5, NOTE_F5, NOTE_C5, NOTE_F5, NOTE_C5, 0,
-        NOTE_D5, NOTE_D5, NOTE_A4, NOTE_D5, NOTE_A4, NOTE_D5, NOTE_A4, 0,
-        NOTE_G5, NOTE_FS5, NOTE_F5, NOTE_DS5, NOTE_D5, NOTE_DS5, NOTE_F5,
-        NOTE_F5, NOTE_F5, NOTE_F5, NOTE_D5, NOTE_A4, NOTE_A4,
-        NOTE_A4, NOTE_B4, NOTE_C5, NOTE_C5, NOTE_D5, NOTE_D5, NOTE_A4, NOTE_A4,
-        NOTE_A4, NOTE_B4, NOTE_C5, NOTE_C5, NOTE_D5, NOTE_D5, 0
-    };
-
-    const uint16_t tempo[] = {
-        8, 8, 8, 8, 8, 8, 4, 8,
-        8, 8, 8, 8, 8, 8, 4, 8,
-        8, 8, 8, 8, 8, 8, 4, 8,
-        8, 8, 8, 8, 8, 8, 4,
-        8, 8, 4, 8, 8, 8,
-        8, 8, 8, 8, 8, 8, 8, 8,
-        8, 8, 8, 8, 8, 8, 4
-    };
-
-    int notes = sizeof(melody)/sizeof(melody[0]);
-
-    for (int i = 0; i < notes; i++) {
-        uint16_t note = melody[i];
-        uint32_t dur = 1000 / tempo[i];
-
-        if (note == 0) {
-            vTaskDelay(pdMS_TO_TICKS(dur));
-        } else {
-            buzzer_play_tone(note, dur);
-        }
-
-        // Pequena pausa entre as notas
-        vTaskDelay(pdMS_TO_TICKS(dur * 0.2));
-    }
-}
-
-
