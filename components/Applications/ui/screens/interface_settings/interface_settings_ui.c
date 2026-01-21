@@ -190,8 +190,15 @@ static void interface_item_event_cb(lv_event_t * e) {
         }
 
         if(type == 0) {
-            if(key == LV_KEY_RIGHT) { theme_idx = (theme_idx + 1) % 12; changed = true; }
-            if(key == LV_KEY_LEFT) { theme_idx = (theme_idx - 1 + 12) % 12; changed = true; }
+            // Theme selector
+            if(key == LV_KEY_RIGHT) { 
+                theme_idx = (theme_idx + 1) % 12; 
+                changed = true; 
+            }
+            if(key == LV_KEY_LEFT) { 
+                theme_idx = (theme_idx - 1 + 12) % 12; 
+                changed = true; 
+            }
             if(changed) {
                 lv_label_set_text_fmt(input_obj, "< %s >", theme_options[theme_idx]);
                 lv_obj_set_style_text_color(input_obj, current_theme.text_main, 0);
@@ -202,10 +209,16 @@ static void interface_item_event_cb(lv_event_t * e) {
                 buzzer_play_sound_file("buzzer_scroll_tick");
             }
         }
-        else if(type == 1) { // Header selector
         else if(type == 1) {
-            if(key == LV_KEY_RIGHT) { header_idx = (header_idx + 1) % 4; changed = true; }
-            if(key == LV_KEY_LEFT) { header_idx = (header_idx - 1 + 4) % 4; changed = true; }
+            // Header selector
+            if(key == LV_KEY_RIGHT) { 
+                header_idx = (header_idx + 1) % 4; 
+                changed = true; 
+            }
+            if(key == LV_KEY_LEFT) { 
+                header_idx = (header_idx - 1 + 4) % 4; 
+                changed = true; 
+            }
             if(changed) {
                 lv_label_set_text_fmt(input_obj, "< %s >", header_options[header_idx]);
                 interface_save_config();
@@ -213,6 +226,8 @@ static void interface_item_event_cb(lv_event_t * e) {
                 buzzer_play_sound_file("buzzer_scroll_tick");
             }
         }
+        else if(type == 2) {
+            // Footer toggle
             if(key == LV_KEY_ENTER || key == LV_KEY_RIGHT || key == LV_KEY_LEFT) {
                 hide_footer = !hide_footer;
                 update_footer_switch(input_obj);
