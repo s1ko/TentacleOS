@@ -34,7 +34,10 @@
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
 #include "ui_manager.h"
-#include "ram_monitor.h"
+#include "sys_monitor.h"
+
+static const char *TAG = "SAFEGUARD";
+
 
 void kernel_init(void) {
   esp_err_t ret = nvs_flash_init();
@@ -70,7 +73,34 @@ void kernel_init(void) {
   wifi_stop();
 
   ui_init();
-  // ram_monitor();
+  sys_monitor(false);
 
   vTaskDelay(pdMS_TO_TICKS(1500));
+}
+
+
+// SAFEGUARDS
+
+#include "msgbox_ui.h" 
+#include <esp_log.h>
+
+void safeguard_alert(const char* title, const char* message) {
+  ESP_LOGE(TAG, "ALERT: %s - %s", title, message);
+
+  buzzer_play_sound_file("buzzer_error");
+
+  if (ui_acquire()) {
+    msgbox_open(LV_SYMBOL_WARNING, message, "OK", NULL, NULL);
+    ui_release();
+  }
+}
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+  ESP_LOGE(TAG, "!!! CRITICAL STACK OVERFLOW DETECTED !!!");
+  ESP_LOGE(TAG, "Task Name: [%s]", pcTaskName);
+  ESP_LOGE(TAG, "Task attempted to use more memory than was allocated.");
+}
+
+void vApplicationMallocFailedHook(void) {
+  ESP_LOGE(TAG, "!!! OUT OF MEMORY (MALLOC FAILED) !!!");
 }

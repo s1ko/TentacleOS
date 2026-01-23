@@ -17,5 +17,6 @@
 #define KERNEL_H
 
 void kernel_init(void);
+void safeguard_alert(const char* title, const char* message);
 
 #endif
