@@ -54,6 +54,7 @@ idf_component_register(SRCS
   ${BADUSB_APP_SRCS}
   ${BLE_APP_SRCS}
   "ui/ui_manager.c"
+  "ui/assets_manager.c"
   ${SUBGHZ_APP_SRCS}
   ${SUBGHZ_UI_SRCS}
   ${BLE_UI_SRCS}
