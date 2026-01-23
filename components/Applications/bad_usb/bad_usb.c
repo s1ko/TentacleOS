@@ -35,7 +35,7 @@ static void usb_hid_send_report(uint8_t keycode, uint8_t modifier) {
 }
 
 static void usb_hid_send_mouse(int8_t x, int8_t y, uint8_t buttons, int8_t wheel) {
-    tud_hid_mouse_report(REPORT_ID_MOUSE, buttons, x, y, wheel, 0);
+  tud_hid_mouse_report(REPORT_ID_MOUSE, buttons, x, y, wheel, 0);
 }
 
 void bad_usb_wait_for_connection(void) {
@@ -66,7 +66,7 @@ void bad_usb_deinit(void) {
   }
   ESP_LOGI(TAG, "Finalizando o modo BadUSB e desinstalando o driver...");
   hid_hal_register_callback(NULL, NULL, NULL);
-  
+
   esp_err_t err = tinyusb_driver_uninstall();
   if (err == ESP_OK) {
     ESP_LOGI(TAG, "Driver TinyUSB desinstalado com sucesso.");
