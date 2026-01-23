@@ -64,10 +64,10 @@ static void sys_monitor_task(void *pvParameters) {
 
           // SPECIAL HANDLING FOR UI TASK
           if (strcmp(pxTaskStatusArray[i].pcTaskName, "UI Task") == 0) {
-              ESP_LOGE(TAG, "UI Task crash detected! Initiating emergency restart sequence...");
-              vTaskDelete(pxTaskStatusArray[i].xHandle);
-              ui_hard_restart();
-              continue; 
+            ESP_LOGE(TAG, "UI Task crash detected! Initiating emergency restart sequence...");
+            vTaskDelete(pxTaskStatusArray[i].xHandle);
+            ui_hard_restart();
+            continue; 
           }
 
           ui_switch_screen(SCREEN_HOME);
