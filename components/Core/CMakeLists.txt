@@ -15,7 +15,7 @@
 
 idf_component_register(SRCS 
   "kernel.c"
-  "ram_monitor.c"
+  "sys_monitor.c"
 
   INCLUDE_DIRS 
   "include"
