@@ -24,8 +24,8 @@
 
 static const char *TAG = "SYS_MONITOR";
 
-#define MONITOR_INTERVAL_MS 1000 
-#define STACK_SIZE_BYTES    4096 
+#define MONITOR_INTERVAL_MS 2000 
+#define STACK_SIZE_BYTES    4096
 #define CRITICAL_STACK_THRESHOLD 256
 
 typedef struct {
@@ -61,6 +61,14 @@ static void sys_monitor_task(void *pvParameters) {
         if (watermark < CRITICAL_STACK_THRESHOLD) {
           ESP_LOGE(TAG, "!!! SECURITY ALERT !!! Task [%s] has CRITICAL STACK: %lu bytes free. TERMINATING TASK.", 
                    pxTaskStatusArray[i].pcTaskName, (unsigned long)watermark);
+
+          // SPECIAL HANDLING FOR UI TASK
+          if (strcmp(pxTaskStatusArray[i].pcTaskName, "UI Task") == 0) {
+              ESP_LOGE(TAG, "UI Task crash detected! Initiating emergency restart sequence...");
+              vTaskDelete(pxTaskStatusArray[i].xHandle);
+              ui_hard_restart();
+              continue; 
+          }
 
           ui_switch_screen(SCREEN_HOME);
 
