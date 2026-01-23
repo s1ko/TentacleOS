@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include "settings_ui.h"
 #include "buzzer.h"
+#include "assets_manager.h"
 
 extern lv_group_t * main_group;
 static const char *TAG = "UI_MENU";
@@ -45,36 +46,6 @@ static const int32_t pos_x[] = {-130, -90, -55, 0, 55, 90, 130};
 static const int32_t opas[]  = {LV_OPA_0, LV_OPA_30, LV_OPA_60, LV_OPA_COVER, LV_OPA_60, LV_OPA_30, LV_OPA_0};
 static const int32_t scales[] = {100, 180, 260, 420, 260, 180, 100};
 
-static lv_image_dsc_t* load_bin_to_psram(const char * path, int32_t w, int32_t h) {
-  struct stat st;
-  if (stat(path, &st) != 0) return NULL;
-  FILE *f = fopen(path, "rb");
-  if (!f) return NULL;
-
-  int header_size = 12;
-  long pixel_data_size = st.st_size - header_size;
-  lv_image_dsc_t * dsc = (lv_image_dsc_t *)heap_caps_malloc(sizeof(lv_image_dsc_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-  uint8_t * pixel_data = (uint8_t *)heap_caps_malloc(pixel_data_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-
-  if (!dsc || !pixel_data) {
-    if (dsc) free(dsc);
-    fclose(f);
-    return NULL;
-  }
-
-  fseek(f, header_size, SEEK_SET);
-  fread(pixel_data, 1, pixel_data_size, f);
-  fclose(f);
-
-  dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-  dsc->header.cf = LV_COLOR_FORMAT_ARGB8888;
-  dsc->header.w = w; dsc->header.h = h;
-  dsc->header.stride = w * 4;
-  dsc->data_size = pixel_data_size;
-  dsc->data = pixel_data;
-  return dsc;
-}
-
 static void start_float_animation(lv_obj_t * obj) {
   lv_anim_del(obj, (lv_anim_exec_xcb_t)lv_obj_set_y);
   lv_anim_t a;
@@ -104,11 +75,7 @@ static void animate_item_to_position(int item_idx) {
   int frame_type = (pos_idx < 3) ? 1 : (pos_idx > 3) ? 2 : 0;
 
   if(!menu_data[item_idx].dscs[frame_type]) {
-    menu_data[item_idx].dscs[frame_type] = load_bin_to_psram(
-      menu_data[item_idx].path_frames[frame_type],
-      menu_data[item_idx].dims[frame_type][0],
-      menu_data[item_idx].dims[frame_type][1]
-    );
+    menu_data[item_idx].dscs[frame_type] = assets_get(menu_data[item_idx].path_frames[frame_type]);
   }
 
   if(menu_data[item_idx].dscs[frame_type]) {

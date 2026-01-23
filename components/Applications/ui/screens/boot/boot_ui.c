@@ -2,7 +2,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include <stdio.h>
-#include <sys/stat.h>
+#include "assets_manager.h"
 
 static const char *TAG = "UI_BOOT";
 static lv_image_dsc_t *octo1_dsc = NULL;
@@ -17,45 +17,9 @@ static void boot_text_anim_cb(void *var, int32_t v) {
     lv_label_set_text((lv_obj_t *)var, dots[v % 3]);
 }
 
-static lv_image_dsc_t *boot_load_bin_to_psram(const char *path, int32_t w, int32_t h) {
-    struct stat st;
-    if (stat(path, &st) != 0) return NULL;
-    
-    FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
-    
-    const int header_size = 12;
-    const long pixel_data_size = st.st_size - header_size;
-    
-    lv_image_dsc_t *dsc = heap_caps_malloc(sizeof(lv_image_dsc_t), 
-                                            MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    uint8_t *pixel_data = heap_caps_malloc(pixel_data_size, 
-                                           MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    
-    if (!dsc || !pixel_data) {
-        free(dsc);
-        free(pixel_data);
-        fclose(f);
-        return NULL;
-    }
-    
-    fseek(f, header_size, SEEK_SET);
-    fread(pixel_data, 1, pixel_data_size, f);
-    fclose(f);
-    
-    dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
-    dsc->header.cf = LV_COLOR_FORMAT_ARGB8888;
-    dsc->header.w = w;
-    dsc->header.h = h;
-    dsc->header.stride = w * 4;
-    dsc->data_size = pixel_data_size;
-    dsc->data = pixel_data;
-    
-    return dsc;
-}
-
 static lv_obj_t *create_fade_image(lv_obj_t *parent, lv_image_dsc_t *src, 
                                    uint32_t delay, uint32_t fade_in, uint32_t fade_out) {
+    if (!src) return NULL;
     lv_obj_t *img = lv_image_create(parent);
     lv_image_set_src(img, src);
     lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
@@ -96,8 +60,8 @@ void ui_boot_show(void) {
     lv_screen_load(boot_screen);
     lv_refr_now(NULL);
     
-    octo2_dsc = boot_load_bin_to_psram("/assets/img/octobit_boot_2.bin", 125, 82);
-    octo1_dsc = boot_load_bin_to_psram("/assets/img/octobit_boot_1.bin", 250, 158);
+    octo2_dsc = assets_get("/assets/img/octobit_boot_2.bin");
+    octo1_dsc = assets_get("/assets/img/octobit_boot_1.bin");
     
     if (octo2_dsc) create_fade_image(boot_screen, octo2_dsc, 200, 400, 400);
     if (octo1_dsc) create_fade_image(boot_screen, octo1_dsc, 3400, 500, 0);
