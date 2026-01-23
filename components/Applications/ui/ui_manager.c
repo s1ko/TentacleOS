@@ -37,6 +37,7 @@
 #include "bluetooth_service.h"
 #include "bad_usb.h"
 #include "boot_ui.h"
+#include "msgbox_ui.h"
 #include "lvgl.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
@@ -50,6 +51,7 @@
 #define LVGL_TICK_PERIOD_MS     5
 
 static SemaphoreHandle_t xGuiSemaphore = NULL;
+static bool is_emergency_restart = false;
 
 static void ui_task(void *pvParameter);
 static void lv_tick_task(void *arg);
@@ -99,17 +101,39 @@ void ui_init(void)
   ESP_LOGI(TAG, "UI Manager inicializado com sucesso.");
 }
 
+void ui_hard_restart(void) {
+    ESP_LOGW(TAG, "Executing UI Task Emergency Restart...");
+    is_emergency_restart = true;
+    xTaskCreatePinnedToCore(
+        ui_task,            
+        "UI Task",          
+        UI_TASK_STACK_SIZE, 
+        NULL,               
+        UI_TASK_PRIORITY,   
+        NULL,               
+        UI_TASK_CORE        
+    );
+}
+
 static void ui_task(void *pvParameter)
 {
-
     ui_theme_init();
+    
+    bool is_recovery = is_emergency_restart; 
+    is_emergency_restart = false; 
+
     if (ui_acquire()) {
-        ui_boot_show(); 
+        if (is_recovery) {
+             ui_home_open();
+             msgbox_open(LV_SYMBOL_WARNING, "UI Recovered!\nInterface task was restarted.", "OK", NULL, NULL);
+        } else {
+             ui_boot_show(); 
+        }
         ui_release();
     }
 
     TickType_t start_tick = xTaskGetTickCount();
-    bool boot_screen_done = false;
+    bool boot_screen_done = is_recovery; 
 
     while (1) {
         if (ui_acquire()) {

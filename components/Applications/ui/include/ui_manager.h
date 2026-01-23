@@ -36,6 +36,7 @@ typedef enum {
 } screen_id_t;
 
 void ui_init(void);
+void ui_hard_restart(void);
 
 bool ui_acquire(void);
 void ui_release(void);
