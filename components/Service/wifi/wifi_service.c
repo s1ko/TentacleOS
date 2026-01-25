@@ -102,6 +102,45 @@ static void wifi_save_known_network(const char *ssid, const char *password) {
   cJSON_Delete(root);
 }
 
+static bool wifi_get_known_network_password(const char *ssid, char *password_buffer, size_t buffer_size) {
+  if (ssid == NULL || password_buffer == NULL) return false;
+
+  if (!storage_assets_is_mounted()) {
+    storage_assets_init();
+  }
+
+  size_t size = 0;
+  char *buffer = (char*)storage_assets_load_file(WIFI_KNOWN_NETWORKS_FILE, &size);
+
+  if (buffer == NULL) return false;
+
+  cJSON *root = cJSON_Parse(buffer);
+  free(buffer);
+
+  if (root == NULL || !cJSON_IsArray(root)) {
+    if (root) cJSON_Delete(root);
+    return false;
+  }
+
+  bool found = false;
+  cJSON *item = NULL;
+  cJSON_ArrayForEach(item, root) {
+    cJSON *j_ssid = cJSON_GetObjectItem(item, "ssid");
+    if (cJSON_IsString(j_ssid) && strcmp(j_ssid->valuestring, ssid) == 0) {
+      cJSON *j_pass = cJSON_GetObjectItem(item, "password");
+      if (cJSON_IsString(j_pass)) {
+        strncpy(password_buffer, j_pass->valuestring, buffer_size - 1);
+        password_buffer[buffer_size - 1] = '\0';
+        found = true;
+      }
+      break;
+    }
+  }
+
+  cJSON_Delete(root);
+  return found;
+}
+
 static TaskHandle_t channel_hopper_task_handle = NULL;
 static StackType_t *hopper_task_stack = NULL;
 static StaticTask_t *hopper_task_tcb = NULL;
@@ -347,11 +386,11 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
 
   if (target_enabled) {
-      ESP_ERROR_CHECK(esp_wifi_start());
-      wifi_active = true;
-      ESP_LOGI(TAG, "Wi-Fi AP started with SSID: %s", target_ssid);
+    ESP_ERROR_CHECK(esp_wifi_start());
+    wifi_active = true;
+    ESP_LOGI(TAG, "Wi-Fi AP started with SSID: %s", target_ssid);
   } else {
-      ESP_LOGI(TAG, "Wi-Fi AP initialized but disabled by config.");
+    ESP_LOGI(TAG, "Wi-Fi AP initialized but disabled by config.");
   }
 
   if (wifi_mutex == NULL) {
@@ -427,15 +466,29 @@ esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password) {
 
   ESP_LOGI(TAG, "Configurating Wi-Fi connection to:: %s", ssid);
 
-  // Save the network to known networks
-  wifi_save_known_network(ssid, password);
+  char effective_password[64] = {0};
+  bool use_password = false;
+
+  if (password != NULL) {
+    strncpy(effective_password, password, sizeof(effective_password) - 1);
+    wifi_save_known_network(ssid, password);
+    use_password = true;
+  } else {
+    if (wifi_get_known_network_password(ssid, effective_password, sizeof(effective_password))) {
+      ESP_LOGI(TAG, "Found known password for %s", ssid);
+      use_password = true;
+    } else {
+      ESP_LOGI(TAG, "No known password for %s, assuming Open Network", ssid);
+      use_password = false;
+    }
+  }
 
   wifi_config_t wifi_config = {0};
 
   strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
 
-  if (password) {
-    strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password));
+  if (use_password && strlen(effective_password) > 0) {
+    strncpy((char *)wifi_config.sta.password, effective_password, sizeof(wifi_config.sta.password));
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
   } else {
     wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
@@ -463,11 +516,11 @@ esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password) {
 }
 
 bool wifi_service_is_connected(void) {
-    return wifi_connected;
+  return wifi_connected;
 }
 
 bool wifi_service_is_active(void) {
-    return wifi_active;
+  return wifi_active;
 }
 
 void wifi_deinit(void) {
@@ -570,7 +623,7 @@ static void wifi_load_ap_config(char* ssid, char* passwd, uint8_t* max_conn, cha
         ip_addr[15] = '\0';
       }
       if (cJSON_IsBool(j_enabled)) {
-          *enabled = cJSON_IsTrue(j_enabled);
+        *enabled = cJSON_IsTrue(j_enabled);
       }
 
       cJSON_Delete(root);
@@ -611,12 +664,12 @@ esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t ma
 
   if (err == ESP_OK) {
     ESP_LOGI(TAG, "Configuration saved successfully to: %s", WIFI_AP_CONFIG_PATH);
-    
+
     // Apply state change based on enabled flag
     if (enabled && !wifi_active) {
-        wifi_start();
+      wifi_start();
     } else if (!enabled && wifi_active) {
-        wifi_stop();
+      wifi_stop();
     }
   } else {
     ESP_LOGE(TAG, "Error writing configuration file: %s", esp_err_to_name(err));
@@ -629,42 +682,42 @@ esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t ma
 }
 
 static void wifi_get_config_defaults(char *ssid, char *password, uint8_t *max_conn, char *ip_addr, bool *enabled) {
-    strncpy(ssid, "Darth Maul", 32);
-    strncpy(password, "MyPassword123", 64);
-    *max_conn = 4;
-    strncpy(ip_addr, "192.168.4.1", 16);
-    *enabled = true;
-    
-    // Override with file values if available
-    wifi_load_ap_config(ssid, password, max_conn, ip_addr, enabled);
+  strncpy(ssid, "Darth Maul", 32);
+  strncpy(password, "MyPassword123", 64);
+  *max_conn = 4;
+  strncpy(ip_addr, "192.168.4.1", 16);
+  *enabled = true;
+
+  // Override with file values if available
+  wifi_load_ap_config(ssid, password, max_conn, ip_addr, enabled);
 }
 
 esp_err_t wifi_set_wifi_enabled(bool enabled) {
-    char ssid[32]; char password[64]; uint8_t max_conn; char ip_addr[16]; bool curr_enabled;
-    wifi_get_config_defaults(ssid, password, &max_conn, ip_addr, &curr_enabled);
-    return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
+  char ssid[32]; char password[64]; uint8_t max_conn; char ip_addr[16]; bool curr_enabled;
+  wifi_get_config_defaults(ssid, password, &max_conn, ip_addr, &curr_enabled);
+  return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
 }
 
 esp_err_t wifi_set_ap_ssid(const char *ssid) {
-    char curr_ssid[32]; char password[64]; uint8_t max_conn; char ip_addr[16]; bool enabled;
-    wifi_get_config_defaults(curr_ssid, password, &max_conn, ip_addr, &enabled);
-    return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
+  char curr_ssid[32]; char password[64]; uint8_t max_conn; char ip_addr[16]; bool enabled;
+  wifi_get_config_defaults(curr_ssid, password, &max_conn, ip_addr, &enabled);
+  return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
 }
 
 esp_err_t wifi_set_ap_password(const char *password) {
-    char ssid[32]; char curr_password[64]; uint8_t max_conn; char ip_addr[16]; bool enabled;
-    wifi_get_config_defaults(ssid, curr_password, &max_conn, ip_addr, &enabled);
-    return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
+  char ssid[32]; char curr_password[64]; uint8_t max_conn; char ip_addr[16]; bool enabled;
+  wifi_get_config_defaults(ssid, curr_password, &max_conn, ip_addr, &enabled);
+  return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
 }
 
 esp_err_t wifi_set_ap_max_conn(uint8_t max_conn) {
-    char ssid[32]; char password[64]; uint8_t curr_max_conn; char ip_addr[16]; bool enabled;
-    wifi_get_config_defaults(ssid, password, &curr_max_conn, ip_addr, &enabled);
-    return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
+  char ssid[32]; char password[64]; uint8_t curr_max_conn; char ip_addr[16]; bool enabled;
+  wifi_get_config_defaults(ssid, password, &curr_max_conn, ip_addr, &enabled);
+  return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
 }
 
 esp_err_t wifi_set_ap_ip(const char *ip_addr) {
-    char ssid[32]; char password[64]; uint8_t max_conn; char curr_ip_addr[16]; bool enabled;
-    wifi_get_config_defaults(ssid, password, &max_conn, curr_ip_addr, &enabled);
-    return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
+  char ssid[32]; char password[64]; uint8_t max_conn; char curr_ip_addr[16]; bool enabled;
+  wifi_get_config_defaults(ssid, password, &max_conn, curr_ip_addr, &enabled);
+  return wifi_save_ap_config(ssid, password, max_conn, ip_addr, enabled);
 }
