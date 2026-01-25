@@ -169,8 +169,6 @@ static void deauth_task(void *pvParameters) {
   }
 
   deauth_task_handle = NULL;
-  if (deauth_task_stack) { heap_caps_free(deauth_task_stack); deauth_task_stack = NULL; }
-  if (deauth_task_tcb) { heap_caps_free(deauth_task_tcb); deauth_task_tcb = NULL; }
   ESP_LOGI(TAG, "Deauther Task Ended");
   vTaskDelete(NULL);
 }
@@ -179,18 +177,22 @@ bool wifi_deauther_start(const wifi_ap_record_t *ap_record, deauth_frame_type_t 
   if (is_running) return false;
   if (ap_record == NULL) return false;
 
+  // Clean up previous task memory if it wasn't freed
+  if (deauth_task_stack) { heap_caps_free(deauth_task_stack); deauth_task_stack = NULL; }
+  if (deauth_task_tcb) { heap_caps_free(deauth_task_tcb); deauth_task_tcb = NULL; }
+
   memcpy(&g_target_ap, ap_record, sizeof(wifi_ap_record_t));
   g_type = type;
   g_is_broadcast = is_broadcast;
   is_running = true;
 
   deauth_task_stack = (StackType_t *)heap_caps_malloc(DEAUTHER_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  deauth_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  deauth_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
   if (!deauth_task_stack || !deauth_task_tcb) {
     ESP_LOGE(TAG, "Failed to alloc Deauther Task PSRAM");
-    if (deauth_task_stack) heap_caps_free(deauth_task_stack);
-    if (deauth_task_tcb) heap_caps_free(deauth_task_tcb);
+    if (deauth_task_stack) { heap_caps_free(deauth_task_stack); deauth_task_stack = NULL; }
+    if (deauth_task_tcb) { heap_caps_free(deauth_task_tcb); deauth_task_tcb = NULL; }
     is_running = false;
     return false;
   }
@@ -209,9 +211,17 @@ bool wifi_deauther_start(const wifi_ap_record_t *ap_record, deauth_frame_type_t 
 }
 
 void wifi_deauther_stop(void) {
-  is_running = false;
+  if (is_running) {
+    is_running = false;
+    // Give task time to finish loop and delete itself
+    vTaskDelay(pdMS_TO_TICKS(DEAUTHER_DELAY_MS + 50)); 
+  }
 }
 
 bool wifi_deauther_is_running(void) {
   return is_running;
+}
+
+int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
+    return 0;
 }

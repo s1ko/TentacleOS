@@ -93,7 +93,7 @@ void signal_monitor_start(const uint8_t *bssid, uint8_t channel) {
     monitor_task_stack = (StackType_t *)heap_caps_malloc(MONITOR_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
   }
   if (monitor_task_tcb == NULL) {
-    monitor_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+    monitor_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   }
 
   if (monitor_task_stack == NULL || monitor_task_tcb == NULL) {

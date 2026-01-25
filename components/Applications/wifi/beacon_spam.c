@@ -101,8 +101,6 @@ static void beacon_spam_task(void *pvParameters) {
 
   vTaskDelete(NULL);
   spam_task_handle = NULL;
-  if (spam_task_stack) { heap_caps_free(spam_task_stack); spam_task_stack = NULL; }
-  if (spam_task_tcb) { heap_caps_free(spam_task_tcb); spam_task_tcb = NULL; }
 }
 
 static void free_ssids() {
@@ -116,8 +114,15 @@ static void free_ssids() {
   ssids_count = 0;
 }
 
+static void free_task_memory() {
+  if (spam_task_stack) { heap_caps_free(spam_task_stack); spam_task_stack = NULL; }
+  if (spam_task_tcb) { heap_caps_free(spam_task_tcb); spam_task_tcb = NULL; }
+}
+
 bool beacon_spam_start_custom(const char *json_path) {
   if (is_running) return false;
+  
+  free_task_memory(); // Ensure clean start
 
   size_t size;
   if (storage_file_get_size(json_path, &size) != ESP_OK || size == 0) {
@@ -184,7 +189,7 @@ bool beacon_spam_start_custom(const char *json_path) {
   is_running = true;
 
   spam_task_stack = (StackType_t *)heap_caps_malloc(BEACON_SPAM_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  spam_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  spam_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
   if (spam_task_stack && spam_task_tcb) {
     spam_task_handle = xTaskCreateStatic(beacon_spam_task, "beacon_spam", BEACON_SPAM_STACK_SIZE, NULL, 5, spam_task_stack, spam_task_tcb);
@@ -202,6 +207,8 @@ bool beacon_spam_start_custom(const char *json_path) {
 
 bool beacon_spam_start_random(void) {
   if (is_running) return false;
+
+  free_task_memory(); // Ensure clean start
 
   ssids_count = BEACON_SPAM_MAX_SSIDS;
   ssids = heap_caps_malloc(ssids_count * sizeof(char *), MALLOC_CAP_SPIRAM);
@@ -221,7 +228,7 @@ bool beacon_spam_start_random(void) {
   is_running = true;
 
   spam_task_stack = (StackType_t *)heap_caps_malloc(BEACON_SPAM_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  spam_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  spam_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
   if (spam_task_stack && spam_task_tcb) {
     spam_task_handle = xTaskCreateStatic(beacon_spam_task, "beacon_spam", BEACON_SPAM_STACK_SIZE, NULL, 5, spam_task_stack, spam_task_tcb);
@@ -244,6 +251,9 @@ void beacon_spam_stop(void) {
   if (spam_task_handle) {
     vTaskDelay(pdMS_TO_TICKS(BEACON_SPAM_INTERVAL_MS + 50));
   }
+  
+  // We can free task memory here if we waited enough
+  free_task_memory();
 
   free_ssids();
   ESP_LOGI(TAG, "Beacon Spam stopped");

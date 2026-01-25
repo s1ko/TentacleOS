@@ -149,12 +149,17 @@ static void flood_task(void *pvParameters) {
 
   vTaskDelete(NULL);
   flood_task_handle = NULL;
+}
+
+static void free_task_memory() {
   if (flood_task_stack) { heap_caps_free(flood_task_stack); flood_task_stack = NULL; }
   if (flood_task_tcb) { heap_caps_free(flood_task_tcb); flood_task_tcb = NULL; }
 }
 
 static bool start_flood(const uint8_t *target_bssid, uint8_t channel, flood_type_t type) {
   if (is_running) return false;
+
+  free_task_memory(); // Clean start
 
   if (target_bssid) memcpy(g_target, target_bssid, 6);
   else memset(g_target, 0xFF, 6);
@@ -164,7 +169,7 @@ static bool start_flood(const uint8_t *target_bssid, uint8_t channel, flood_type
   is_running = true;
 
   flood_task_stack = (StackType_t *)heap_caps_malloc(FLOOD_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  flood_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  flood_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
   if (flood_task_stack && flood_task_tcb) {
     flood_task_handle = xTaskCreateStatic(flood_task, "wifi_flood", FLOOD_STACK_SIZE, NULL, 5, flood_task_stack, flood_task_tcb);
@@ -196,6 +201,7 @@ void wifi_flood_stop(void) {
   if (!is_running) return;
   is_running = false;
   vTaskDelay(pdMS_TO_TICKS(100)); 
+  free_task_memory();
   ESP_LOGI(TAG, "Flood stopped");
 }
 

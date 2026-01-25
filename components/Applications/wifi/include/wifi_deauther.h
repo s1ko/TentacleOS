@@ -34,5 +34,4 @@ void wifi_send_association_request(const wifi_ap_record_t *ap_record);
 bool wifi_deauther_start(const wifi_ap_record_t *ap_record, deauth_frame_type_t type, bool is_broadcast);
 void wifi_deauther_stop(void);
 bool wifi_deauther_is_running(void);
-
 #endif // !WIFI_DEAUTHER_H

@@ -280,9 +280,6 @@ static void sniffer_stream_task(void *arg) {
   free(chunk_buf);
   stream_task_handle = NULL;
 
-  if (stream_task_stack) { heap_caps_free(stream_task_stack); stream_task_stack = NULL; }
-  if (stream_task_tcb) { heap_caps_free(stream_task_tcb); stream_task_tcb = NULL; }
-
   vTaskDelete(NULL);
 }
 
@@ -483,7 +480,7 @@ bool wifi_sniffer_start_stream_sd(sniff_type_t type, uint8_t channel, const char
   is_sniffing = true; 
 
   stream_task_stack = (StackType_t *)heap_caps_malloc(4096 * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  stream_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  stream_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 
   if (stream_task_stack && stream_task_tcb) {
     stream_task_handle = xTaskCreateStatic(
@@ -531,10 +528,10 @@ void wifi_sniffer_stop(void) {
 
   if (stream_task_handle) {
     vTaskDelay(pdMS_TO_TICKS(200)); 
-  } else {
-    if (stream_task_stack) { heap_caps_free(stream_task_stack); stream_task_stack = NULL; }
-    if (stream_task_tcb) { heap_caps_free(stream_task_tcb); stream_task_tcb = NULL; }
-  }
+  } 
+  
+  if (stream_task_stack) { heap_caps_free(stream_task_stack); stream_task_stack = NULL; }
+  if (stream_task_tcb) { heap_caps_free(stream_task_tcb); stream_task_tcb = NULL; }
 
   ESP_LOGI(TAG, "Sniffer stopped. Captured %lu packets. Buffer usage: %lu bytes", packet_count, buffer_offset);
 }

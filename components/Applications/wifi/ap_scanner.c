@@ -174,7 +174,7 @@ bool ap_scanner_start(void) {
     scanner_task_stack = (StackType_t *)heap_caps_malloc(SCANNER_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
   }
   if (scanner_task_tcb == NULL) {
-    scanner_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+    scanner_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   }
 
   if (scanner_task_stack == NULL || scanner_task_tcb == NULL) {
