@@ -78,6 +78,18 @@ Connects the device (as a station) to an external Access Point.
 - Configures authentication mode based on the presence of a password (WPA2_PSK or OPEN).
 - Disconnects any existing connection before attempting a new one.
 
+#### `wifi_service_is_connected`
+```c
+bool wifi_service_is_connected(void);
+```
+Returns `true` if the device is currently connected to an external Wi-Fi network and has an IP address.
+
+#### `wifi_service_is_active`
+```c
+bool wifi_service_is_active(void);
+```
+Returns `true` if the Wi-Fi service is started (driver initialized and interface up).
+
 #### `wifi_change_to_hotspot`
 ```c
 void wifi_change_to_hotspot(const char *new_ssid);
