@@ -23,6 +23,7 @@
 #include "nvs_flash.h"
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "storage_write.h"
@@ -38,6 +39,8 @@
 static wifi_ap_record_t stored_aps[WIFI_SCAN_LIST_SIZE];
 static uint16_t stored_ap_count = 0;
 static SemaphoreHandle_t wifi_mutex = NULL;
+static bool wifi_active = false;
+static bool wifi_connected = false;
 static void wifi_load_ap_config(char* ssid, char* passwd, uint8_t* max_conn, char* ip_addr);
 
 static TaskHandle_t channel_hopper_task_handle = NULL;
@@ -153,9 +156,15 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     led_blink_green();
   } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED) {
     led_blink_red();
+  } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+    ESP_LOGI(TAG, "Disconnected from AP");
+    wifi_connected = false;
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_AP_STAIPASSIGNED) {
     ESP_LOGI(TAG, "IP assigned to station connected to AP");
     led_blink_green();
+  } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+    ESP_LOGI(TAG, "Got IP address, Wi-Fi connected");
+    wifi_connected = true;
   }
 }
 
@@ -236,7 +245,7 @@ void wifi_init(void) {
   }
 
   esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
-  esp_event_handler_instance_register(IP_EVENT, IP_EVENT_AP_STAIPASSIGNED, &wifi_event_handler, NULL, NULL);
+  esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
 
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
@@ -278,6 +287,8 @@ void wifi_init(void) {
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
 
   ESP_ERROR_CHECK(esp_wifi_start());
+
+  wifi_active = true;
 
   if (wifi_mutex == NULL) {
     wifi_mutex = xSemaphoreCreateMutex();
@@ -386,6 +397,14 @@ esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password) {
   return ESP_OK;
 }
 
+bool wifi_service_is_connected(void) {
+    return wifi_connected;
+}
+
+bool wifi_service_is_active(void) {
+    return wifi_active;
+}
+
 void wifi_deinit(void) {
   ESP_LOGI(TAG, "Starting Wi-Fi deactivation...");
   esp_err_t err;
@@ -397,6 +416,9 @@ void wifi_deinit(void) {
   } else if (err != ESP_OK) {
     ESP_LOGE(TAG, "Error stopping Wi-Fi: %s", esp_err_to_name(err));
   }
+
+  wifi_active = false;
+  wifi_connected = false;
 
   err = esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler);
   if (err != ESP_OK) {
@@ -427,7 +449,9 @@ void wifi_deinit(void) {
 void wifi_start(void){
   esp_err_t err;
   err = esp_wifi_start();
-  if(err != ESP_OK){
+  if(err == ESP_OK){
+    wifi_active = true;
+  } else {
     ESP_LOGE(TAG, "Error starting Wi-Fi: %s", esp_err_to_name(err));
   }
 }
@@ -435,7 +459,10 @@ void wifi_start(void){
 void wifi_stop(void){
   esp_err_t err;
   err = esp_wifi_stop();
-  if(err != ESP_OK){
+  if(err == ESP_OK){
+    wifi_active = false;
+    wifi_connected = false;
+  } else {
     ESP_LOGE(TAG, "Error stopping Wi-Fi: %s", esp_err_to_name(err));
   }
 
