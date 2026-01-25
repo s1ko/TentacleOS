@@ -100,7 +100,7 @@ void wifi_service_start_channel_hopping(void) {
     hopper_task_stack = (StackType_t *)heap_caps_malloc(HOPPER_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
   }
   if (hopper_task_tcb == NULL) {
-    hopper_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+    hopper_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   }
 
   if (hopper_task_stack == NULL || hopper_task_tcb == NULL) {
