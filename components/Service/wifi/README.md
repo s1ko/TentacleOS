@@ -13,6 +13,7 @@ The service handles:
 - **Promiscuous Mode:** Low-level packet sniffing and environment monitoring.
 - **Channel Hopping:** Automated cycling through Wi-Fi channels for environment monitoring.
 - **Configuration Persistence:** Loading and saving AP settings to/from `assets/config/wifi/wifi_ap.conf`.
+- **Known Networks:** Automatically saves connected network credentials to `assets/storage/wifi/know_networks.json`.
 
 ## API Functions
 
@@ -77,6 +78,7 @@ esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password);
 Connects the device (as a station) to an external Access Point.
 - Configures authentication mode based on the presence of a password (WPA2_PSK or OPEN).
 - Disconnects any existing connection before attempting a new one.
+- **Persistence:** Automatically saves the SSID and password to `assets/storage/wifi/know_networks.json`. If the network already exists, the password is updated.
 
 #### `wifi_service_is_connected`
 ```c
@@ -135,13 +137,25 @@ Stops the channel hopping task and frees associated memory resources.
 
 #### `wifi_save_ap_config`
 ```c
-esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t max_conn, const char *ip_addr);
+esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t max_conn, const char *ip_addr, bool enabled);
 ```
 Saves the AP configuration to a JSON file (`/assets/config/wifi/wifi_ap.conf`).
 - Uses `cJSON` to serialize settings.
 - Persists data using the storage API.
+- **State Management:** If `enabled` is `true` and Wi-Fi is inactive, it calls `wifi_start()`. If `enabled` is `false` and Wi-Fi is active, it calls `wifi_stop()`.
 
-**Internal Loader:** `wifi_load_ap_config` is called during initialization to read these settings.
+#### Individual Setters
+Helper functions to update a single configuration parameter while preserving others. They automatically save the config and trigger state changes if `enabled` is toggled.
+
+```c
+esp_err_t wifi_set_wifi_enabled(bool enabled);
+esp_err_t wifi_set_ap_ssid(const char *ssid);
+esp_err_t wifi_set_ap_password(const char *password);
+esp_err_t wifi_set_ap_max_conn(uint8_t max_conn);
+esp_err_t wifi_set_ap_ip(const char *ip_addr);
+```
+
+**Internal Loader:** `wifi_load_ap_config` is called during initialization to read these settings. If `enabled` is found to be `false` in the config, `wifi_init` will initialize the driver but **not** start the radio.
 
 ## Internal Implementation Details
 
