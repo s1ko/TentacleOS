@@ -92,6 +92,12 @@ bool wifi_service_is_active(void);
 ```
 Returns `true` if the Wi-Fi service is started (driver initialized and interface up).
 
+#### `wifi_service_get_connected_ssid`
+```c
+const char* wifi_service_get_connected_ssid(void);
+```
+Returns the SSID of the currently connected network. Returns `NULL` if not connected.
+
 #### `wifi_change_to_hotspot`
 ```c
 void wifi_change_to_hotspot(const char *new_ssid);
