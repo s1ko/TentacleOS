@@ -26,7 +26,6 @@
 #include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "storage_write.h"
 #include "storage_assets.h"
 #include "cJSON.h"
 #include "lwip/inet.h"
@@ -34,9 +33,9 @@
 // #include "virtual_display_client.h" // Adicionar este include
 
 #define WIFI_AP_CONFIG_FILE "config/wifi/wifi_ap.conf"
-#define WIFI_AP_CONFIG_PATH "/assets/" WIFI_AP_CONFIG_FILE
 #define WIFI_KNOWN_NETWORKS_FILE "storage/wifi/know_networks.json"
-#define WIFI_KNOWN_NETWORKS_PATH "/assets/" WIFI_KNOWN_NETWORKS_FILE
+
+static const char *TAG = "wifi_service";
 
 static wifi_ap_record_t stored_aps[WIFI_SCAN_LIST_SIZE];
 static uint16_t stored_ap_count = 0;
@@ -90,13 +89,14 @@ static void wifi_save_known_network(const char *ssid, const char *password) {
 
   char *json_string = cJSON_PrintUnformatted(root);
   if (json_string != NULL) {
-    esp_err_t err = storage_write_string(WIFI_KNOWN_NETWORKS_PATH, json_string);
-    if (err == ESP_OK) {
-      ESP_LOGI(TAG, "Known network saved: %s", ssid);
-    } else {
-      ESP_LOGE(TAG, "Failed to save known network: %s", esp_err_to_name(err));
-    }
-    free(json_string);
+      esp_err_t err = storage_assets_write_file(WIFI_KNOWN_NETWORKS_FILE, json_string);
+      
+      if (err == ESP_OK) {
+          ESP_LOGI(TAG, "Known network saved: %s", ssid);
+      } else {
+          ESP_LOGE(TAG, "Failed to save to assets: %s", esp_err_to_name(err));
+      }
+      free(json_string);
   }
 
   cJSON_Delete(root);
@@ -145,8 +145,6 @@ static TaskHandle_t channel_hopper_task_handle = NULL;
 static StackType_t *hopper_task_stack = NULL;
 static StaticTask_t *hopper_task_tcb = NULL;
 #define HOPPER_STACK_SIZE 4096
-
-static const char *TAG = "wifi_service";
 
 static void channel_hopper_task(void *pvParameters) {
   uint8_t channel = 1;
@@ -674,10 +672,10 @@ esp_err_t wifi_save_ap_config(const char *ssid, const char *password, uint8_t ma
     return ESP_ERR_NO_MEM;
   }
 
-  esp_err_t err = storage_write_string(WIFI_AP_CONFIG_PATH, json_string);
+  esp_err_t err = storage_assets_write_file(WIFI_AP_CONFIG_FILE, json_string);
 
   if (err == ESP_OK) {
-    ESP_LOGI(TAG, "Configuration saved successfully to: %s", WIFI_AP_CONFIG_PATH);
+    ESP_LOGI(TAG, "Configuration saved successfully to: %s", WIFI_AP_CONFIG_FILE);
 
     // Apply state change based on enabled flag
     if (enabled && !wifi_active) {
