@@ -34,6 +34,7 @@ void wifi_change_to_hotspot(const char *new_ssid);
 esp_err_t wifi_service_connect_to_ap(const char *ssid, const char *password);
 bool wifi_service_is_connected(void);
 bool wifi_service_is_active(void);
+const char* wifi_service_get_connected_ssid(void);
 
 // functions to scan and storage
 void wifi_service_scan(void);
