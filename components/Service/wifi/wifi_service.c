@@ -520,11 +520,25 @@ bool wifi_service_is_connected(void) {
 }
 
 bool wifi_service_is_active(void) {
-  return wifi_active;
+    return wifi_active;
 }
 
-void wifi_deinit(void) {
-  ESP_LOGI(TAG, "Starting Wi-Fi deactivation...");
+const char* wifi_service_get_connected_ssid(void) {
+    static char connected_ssid[33];
+    if (!wifi_connected) {
+        return NULL;
+    }
+
+    wifi_config_t config;
+    if (esp_wifi_get_config(WIFI_IF_STA, &config) == ESP_OK) {
+        strncpy(connected_ssid, (char*)config.sta.ssid, 32);
+        connected_ssid[32] = '\0';
+        return connected_ssid;
+    }
+    return NULL;
+}
+
+void wifi_deinit(void) {  ESP_LOGI(TAG, "Starting Wi-Fi deactivation...");
   esp_err_t err;
 
   err = esp_wifi_stop();
