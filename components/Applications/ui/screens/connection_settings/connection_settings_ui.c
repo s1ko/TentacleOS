@@ -7,15 +7,23 @@
 #include "lv_port_indev.h"
 #include "buzzer.h"
 #include "esp_log.h"
+#include "wifi_service.h"
+#include "msgbox_ui.h"
+#include "esp_timer.h"
+#include <stdio.h>
+#include <string.h>
+
+static const char *TAG = "CONN_UI";
 
 static lv_obj_t * screen_conn = NULL;
 static lv_style_t style_menu;
 static lv_style_t style_item;
 static bool styles_initialized = false;
-
-static bool wifi_enabled = true;
-static bool bt_enabled = false;
-static bool airplane_mode = false;
+static lv_obj_t * item_wifi_sw = NULL;
+static lv_obj_t * item_wifi_nav = NULL;
+static int64_t msgbox_open_time = 0;
+static lv_timer_t * wifi_loading_timer = NULL;
+static int64_t wifi_loading_start_time = 0;
 
 static void init_styles(void) {
     if(styles_initialized) {
@@ -54,6 +62,42 @@ static void update_switch_visual(lv_obj_t * cont, bool state) {
     lv_obj_set_style_bg_opa(on_ind, state ? LV_OPA_COVER : LV_OPA_30, 0);
 }
 
+static void restore_connection_group(void) {
+    if (!main_group || !item_wifi_sw || !item_wifi_nav) return;
+    lv_group_set_editing(main_group, false);
+    lv_group_remove_all_objs(main_group);
+    lv_group_add_obj(main_group, item_wifi_sw);
+    lv_group_add_obj(main_group, item_wifi_nav);
+    lv_group_focus_obj(item_wifi_sw);
+}
+
+static void restore_connection_group_async(void * user_data) {
+    (void)user_data;
+    restore_connection_group();
+}
+
+static void on_wifi_off_msgbox_closed(bool confirm) {
+    (void)confirm;
+    lv_async_call(restore_connection_group_async, NULL);
+}
+
+static void wifi_loading_timer_cb(lv_timer_t * timer) {
+    int64_t elapsed = esp_timer_get_time() - wifi_loading_start_time;
+    if ((wifi_service_is_active() && elapsed >= 1500000) || elapsed >= 5000000) {
+        lv_timer_del(timer);
+        wifi_loading_timer = NULL;
+        msgbox_close();
+        restore_connection_group();
+    }
+}
+
+static void show_wifi_loading(void) {
+    if (wifi_loading_timer) lv_timer_del(wifi_loading_timer);
+    wifi_loading_start_time = esp_timer_get_time();
+    msgbox_open(LV_SYMBOL_WIFI, "LIGANDO WIFI...", NULL, NULL, NULL);
+    wifi_loading_timer = lv_timer_create(wifi_loading_timer_cb, 100, NULL);
+}
+
 static void conn_item_event_cb(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * item = lv_event_get_target(e);
@@ -72,29 +116,37 @@ static void conn_item_event_cb(lv_event_t * e) {
     else if(code == LV_EVENT_KEY) {
         uint32_t key = lv_event_get_key(e);
 
-        if(key == LV_KEY_ESC || key == LV_KEY_LEFT) {
+        if(key == LV_KEY_ESC) {
             buzzer_play_sound_file("buzzer_click");
             ui_switch_screen(SCREEN_SETTINGS);
             return;
         }
 
-        if(key == LV_KEY_ENTER || key == LV_KEY_RIGHT) {
-            if(type <= 2) { 
-                lv_obj_t * sw_cont = lv_obj_get_child(item, 2);
-                if(type == 0) wifi_enabled = !wifi_enabled;
-                else if(type == 1) bt_enabled = !bt_enabled;
-                else if(type == 2) airplane_mode = !airplane_mode;
+        if(key == LV_KEY_ENTER || key == LV_KEY_RIGHT || key == LV_KEY_LEFT) {
+            if(type == 0) {
+                bool current_state = wifi_service_is_active();
+                bool new_state = !current_state;
+                update_switch_visual(lv_obj_get_child(item, 2), new_state);
+                wifi_set_wifi_enabled(new_state); 
                 
-                update_switch_visual(sw_cont, (type == 0) ? wifi_enabled : (type == 1) ? bt_enabled : airplane_mode);
+                if(new_state) {
+                    show_wifi_loading();
+                } else {
+                    msgbox_close();
+                }
+                
                 buzzer_play_sound_file("buzzer_hacker_confirm");
-            } 
-            else if(type == 3) {
-                buzzer_play_sound_file("buzzer_hacker_confirm");
-                ui_switch_screen(SCREEN_CONNECT_WIFI);
             }
-            else if(type == 4) {
-                buzzer_play_sound_file("buzzer_hacker_confirm");
-                ui_switch_screen(SCREEN_CONNECT_BLUETOOTH);
+            else if(type == 1) {
+                if (!wifi_service_is_active()) {
+                    int64_t now = esp_timer_get_time();
+                    if (now - msgbox_open_time < 300000) return;
+                    msgbox_open_time = now;
+                    msgbox_open(LV_SYMBOL_CLOSE, "WIFI OFF", "OK", NULL, on_wifi_off_msgbox_closed);
+                } else {
+                    buzzer_play_sound_file("buzzer_hacker_confirm");
+                    ui_switch_screen(SCREEN_CONNECT_WIFI);
+                }
             }
         }
     }
@@ -148,6 +200,8 @@ void ui_connection_settings_open(void) {
     init_styles();
     if(screen_conn) lv_obj_del(screen_conn);
 
+    bool wifi_active = wifi_service_is_active();
+
     screen_conn = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_conn, current_theme.screen_base, 0);
     lv_obj_clear_flag(screen_conn, LV_OBJ_FLAG_SCROLLABLE);
@@ -162,37 +216,18 @@ void ui_connection_settings_open(void) {
     lv_obj_set_flex_flow(menu, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scrollbar_mode(menu, LV_SCROLLBAR_MODE_OFF);
 
-    lv_obj_t * item_wifi_sw = create_menu_item(menu, LV_SYMBOL_WIFI, "WI-FI");
-    create_switch_input(item_wifi_sw, wifi_enabled);
+    item_wifi_sw = create_menu_item(menu, LV_SYMBOL_WIFI, "WI-FI");
+    create_switch_input(item_wifi_sw, wifi_active);
     lv_obj_add_event_cb(item_wifi_sw, conn_item_event_cb, LV_EVENT_ALL, (void*)0);
 
-    lv_obj_t * item_wifi_nav = create_menu_item(menu, LV_SYMBOL_SETTINGS, "NETWORKS"); 
-    lv_obj_t * icon_next1 = lv_label_create(item_wifi_nav);
-    lv_label_set_text(icon_next1, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(icon_next1, current_theme.text_main, 0); 
-    lv_obj_add_event_cb(item_wifi_nav, conn_item_event_cb, LV_EVENT_ALL, (void*)3);
-
-    lv_obj_t * item_bt_sw = create_menu_item(menu, LV_SYMBOL_BLUETOOTH, "BLUETOOTH");
-    create_switch_input(item_bt_sw, bt_enabled);
-    lv_obj_add_event_cb(item_bt_sw, conn_item_event_cb, LV_EVENT_ALL, (void*)1);
-
-    lv_obj_t * item_bt_nav = create_menu_item(menu, LV_SYMBOL_SETTINGS, "DEVICES");
-    lv_obj_t * icon_next2 = lv_label_create(item_bt_nav);
-    lv_label_set_text(icon_next2, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(icon_next2, current_theme.text_main, 0); 
-    lv_obj_add_event_cb(item_bt_nav, conn_item_event_cb, LV_EVENT_ALL, (void*)4);
-
-    lv_obj_t * item_air = create_menu_item(menu, LV_SYMBOL_GPS, "AIRPLANE");
-    create_switch_input(item_air, airplane_mode);
-    lv_obj_add_event_cb(item_air, conn_item_event_cb, LV_EVENT_ALL, (void*)2);
+    item_wifi_nav = create_menu_item(menu, LV_SYMBOL_SETTINGS, "NETWORKS"); 
+    lv_obj_t * icon_next = lv_label_create(item_wifi_nav);
+    lv_label_set_text(icon_next, LV_SYMBOL_RIGHT);
+    lv_obj_set_style_text_color(icon_next, current_theme.text_main, 0); 
+    lv_obj_add_event_cb(item_wifi_nav, conn_item_event_cb, LV_EVENT_ALL, (void*)1);
 
     if(main_group) {
-        lv_group_add_obj(main_group, item_wifi_sw);
-        lv_group_add_obj(main_group, item_wifi_nav);
-        lv_group_add_obj(main_group, item_bt_sw);
-        lv_group_add_obj(main_group, item_bt_nav);
-        lv_group_add_obj(main_group, item_air);
-        lv_group_focus_obj(item_wifi_sw);
+        restore_connection_group();
     }
 
     lv_screen_load(screen_conn);
