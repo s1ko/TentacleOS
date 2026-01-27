@@ -2,10 +2,7 @@
 #include "core/lv_group.h"
 #include "buzzer.h"
 #include "esp_timer.h"
-
-#define COLOR_BORDER        0x834EC6
-#define COLOR_GRADIENT_TOP  0x000000
-#define COLOR_GRADIENT_BOT  0x2E0157
+#include "ui_theme.h"
 
 static lv_obj_t * msgbox_overlay = NULL;
 static msgbox_cb_t current_cb = NULL;
@@ -20,18 +17,18 @@ static void init_msgbox_styles(void) {
     if(styles_init) return;
 
     lv_style_init(&style_box);
-    lv_style_set_bg_color(&style_box, lv_color_black());
+    lv_style_set_bg_color(&style_box, current_theme.screen_base);
     lv_style_set_border_width(&style_box, 2);
-    lv_style_set_border_color(&style_box, lv_color_hex(COLOR_BORDER));
+    lv_style_set_border_color(&style_box, current_theme.border_accent);
     lv_style_set_radius(&style_box, 10);
     lv_style_set_pad_all(&style_box, 10);
 
     lv_style_init(&style_btn);
-    lv_style_set_bg_color(&style_btn, lv_color_hex(COLOR_GRADIENT_BOT));
-    lv_style_set_bg_grad_color(&style_btn, lv_color_hex(COLOR_GRADIENT_TOP));
+    lv_style_set_bg_color(&style_btn, current_theme.bg_item_bot);
+    lv_style_set_bg_grad_color(&style_btn, current_theme.bg_item_top);
     lv_style_set_bg_grad_dir(&style_btn, LV_GRAD_DIR_VER);
     lv_style_set_border_width(&style_btn, 1);
-    lv_style_set_border_color(&style_btn, lv_color_hex(0x444444));
+    lv_style_set_border_color(&style_btn, current_theme.border_inactive);
     lv_style_set_radius(&style_btn, 4);
     lv_style_set_text_color(&style_btn, lv_color_white());
 
@@ -86,7 +83,7 @@ void msgbox_open(const char * icon, const char * msg, const char * btn_ok, const
 
     msgbox_overlay = lv_obj_create(lv_screen_active());
     lv_obj_set_size(msgbox_overlay, lv_pct(100), lv_pct(100));
-    lv_obj_set_style_bg_color(msgbox_overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(msgbox_overlay, current_theme.screen_base, 0);
     lv_obj_set_style_bg_opa(msgbox_overlay, LV_OPA_70, 0);
     lv_obj_clear_flag(msgbox_overlay, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(msgbox_overlay, msgbox_overlay_event_cb, LV_EVENT_KEY, NULL);
@@ -109,11 +106,11 @@ void msgbox_open(const char * icon, const char * msg, const char * btn_ok, const
 
     lv_obj_t * icon_lbl = lv_label_create(info_cont);
     lv_label_set_text(icon_lbl, icon);
-    lv_obj_set_style_text_color(icon_lbl, lv_color_hex(COLOR_BORDER), 0);
+    lv_obj_set_style_text_color(icon_lbl, current_theme.border_accent, 0);
 
     lv_obj_t * msg_lbl = lv_label_create(info_cont);
     lv_label_set_text(msg_lbl, msg);
-    lv_obj_set_style_text_color(msg_lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(msg_lbl, current_theme.text_main, 0);
     lv_label_set_long_mode(msg_lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(msg_lbl, 180);
 
@@ -135,7 +132,7 @@ void msgbox_open(const char * icon, const char * msg, const char * btn_ok, const
         c_btn = lv_btn_create(btn_cont);
         lv_obj_set_size(c_btn, 90, 32);
         lv_obj_add_style(c_btn, &style_btn, 0);
-        lv_obj_set_style_border_color(c_btn, lv_color_hex(COLOR_BORDER), LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_border_color(c_btn, current_theme.border_accent, LV_STATE_FOCUS_KEY);
         lv_obj_set_style_border_width(c_btn, 2, LV_STATE_FOCUS_KEY);
         
         lv_obj_t * c_lbl = lv_label_create(c_btn);
@@ -148,7 +145,7 @@ void msgbox_open(const char * icon, const char * msg, const char * btn_ok, const
         o_btn = lv_btn_create(btn_cont);
         lv_obj_set_size(o_btn, 90, 32);
         lv_obj_add_style(o_btn, &style_btn, 0);
-        lv_obj_set_style_border_color(o_btn, lv_color_hex(COLOR_BORDER), LV_STATE_FOCUS_KEY);
+        lv_obj_set_style_border_color(o_btn, current_theme.border_accent, LV_STATE_FOCUS_KEY);
         lv_obj_set_style_border_width(o_btn, 2, LV_STATE_FOCUS_KEY);
 
         lv_obj_t * o_lbl = lv_label_create(o_btn);
