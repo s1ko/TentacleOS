@@ -130,12 +130,15 @@ static void on_keyboard_submit(const char * text, void * user_data) {
 
 static void init_styles(void) {
     if(styles_initialized) return;
+    
     lv_style_init(&style_menu);
-    lv_style_set_bg_opa(&style_menu, LV_OPA_TRANSP);
+    lv_style_set_bg_color(&style_menu, current_theme.screen_base);
+    lv_style_set_bg_opa(&style_menu, LV_OPA_COVER);
     lv_style_set_border_width(&style_menu, 2);
-    lv_style_set_border_color(&style_menu, current_theme.border_accent);
+    lv_style_set_border_color(&style_menu, current_theme.border_interface);
     lv_style_set_radius(&style_menu, 0); 
     lv_style_set_pad_all(&style_menu, 4);
+
     lv_style_init(&style_item);
     lv_style_set_bg_color(&style_item, current_theme.bg_item_bot);
     lv_style_set_bg_grad_color(&style_item, current_theme.bg_item_top);
@@ -143,6 +146,7 @@ static void init_styles(void) {
     lv_style_set_border_width(&style_item, 1);
     lv_style_set_border_color(&style_item, current_theme.border_inactive);
     lv_style_set_radius(&style_item, 0); 
+    
     styles_initialized = true;
 }
 
@@ -153,6 +157,7 @@ static void wifi_item_event_cb(lv_event_t * e) {
         buzzer_play_sound_file("buzzer_scroll_tick");
         lv_obj_set_style_border_color(item, current_theme.border_accent, 0);
         lv_obj_set_style_border_width(item, 2, 0);
+        lv_obj_scroll_to_view(item, LV_ANIM_ON);
     } else if(code == LV_EVENT_DEFOCUSED) {
         lv_obj_set_style_border_color(item, current_theme.border_inactive, 0);
         lv_obj_set_style_border_width(item, 1, 0);
@@ -185,52 +190,72 @@ void ui_connect_wifi_open(void) {
     screen_wifi_list = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_wifi_list, current_theme.screen_base, 0);
     lv_obj_clear_flag(screen_wifi_list, LV_OBJ_FLAG_SCROLLABLE);
+
     header_ui_create(screen_wifi_list);
     footer_ui_create(screen_wifi_list);
+
     wifi_list_cont = lv_obj_create(screen_wifi_list);
     lv_obj_set_size(wifi_list_cont, 230, 160);
     lv_obj_align(wifi_list_cont, LV_ALIGN_CENTER, 0, 10);
     lv_obj_add_style(wifi_list_cont, &style_menu, 0);
     lv_obj_set_flex_flow(wifi_list_cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scrollbar_mode(wifi_list_cont, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_add_flag(wifi_list_cont, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(wifi_list_cont, LV_DIR_VER);
+
     lv_obj_t * loading = lv_label_create(screen_wifi_list);
     lv_label_set_text(loading, "SCANNING...");
     lv_obj_set_style_text_color(loading, current_theme.text_main, 0);
     lv_obj_center(loading);
+
     lv_screen_load(screen_wifi_list);
     lv_refr_now(NULL);
+
     if (!wifi_service_is_active()) {
         lv_label_set_text(loading, "WIFI OFF");
         return;
     }
+
     wifi_service_scan();
     uint16_t ap_count = wifi_service_get_ap_count();
     lv_obj_del(loading);
+
     if(main_group) lv_group_remove_all_objs(main_group);
+
     for(uint16_t i = 0; i < ap_count; i++) {
         wifi_ap_record_t * ap = wifi_service_get_ap_record(i);
         if(!ap) continue;
+
         lv_obj_t * item = lv_obj_create(wifi_list_cont);
         lv_obj_set_size(item, lv_pct(100), 40);
         lv_obj_add_style(item, &style_item, 0);
         lv_obj_set_flex_flow(item, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(item, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_clear_flag(item, LV_OBJ_FLAG_SCROLLABLE);
+
         lv_obj_t * icon = lv_label_create(item);
         lv_label_set_text(icon, LV_SYMBOL_WIFI);
         lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
+
         lv_obj_t * lbl_ssid = lv_label_create(item);
         lv_label_set_text(lbl_ssid, (char *)ap->ssid);
         lv_obj_set_style_text_color(lbl_ssid, current_theme.text_main, 0);
         lv_obj_set_flex_grow(lbl_ssid, 1);
         lv_obj_set_style_margin_left(lbl_ssid, 8, 0);
+
         if(ap->authmode != WIFI_AUTH_OPEN) {
             lv_obj_t * lock = lv_label_create(item);
             lv_label_set_text(lock, "KEY");
             lv_obj_set_style_text_color(lock, current_theme.text_main, 0);
         }
+
         lv_obj_set_user_data(item, (void *)ap);
         lv_obj_add_event_cb(item, wifi_item_event_cb, LV_EVENT_ALL, NULL);
         if(main_group) lv_group_add_obj(main_group, item);
+    }
+
+    if(main_group) {
+        lv_obj_t * first = lv_obj_get_child(wifi_list_cont, 0);
+        if(first) lv_group_focus_obj(first);
     }
 }
