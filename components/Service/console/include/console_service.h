@@ -21,5 +21,6 @@ esp_err_t console_service_init(void);
 void console_service_start(void);
 void register_fs_commands(void);
 void register_system_commands(void);
+void register_wifi_commands(void);
 
 #endif // CONSOLE_SERVICE_H
