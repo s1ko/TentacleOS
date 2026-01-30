@@ -71,7 +71,7 @@ static void wifi_option_select_cb(lv_event_t * e) {
         buzzer_play_sound_file("buzzer_hacker_confirm");
         
         switch(index) {
-            case 0: ui_switch_screen(SCREEN_WIFI_SCAN); break;
+            case 0: ui_switch_screen(SCREEN_WIFI_SCAN_MENU); break;
             case 1: ui_switch_screen(SCREEN_WIFI_DEAUTH); break;
             case 2: ui_switch_screen(SCREEN_WIFI_EVIL_TWIN); break;
             case 3: ui_switch_screen(SCREEN_WIFI_BEACON_SPAM); break;
