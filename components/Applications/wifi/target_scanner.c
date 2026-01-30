@@ -238,6 +238,12 @@ target_client_record_t* target_scanner_get_results(uint16_t *count) {
   return scan_results;
 }
 
+target_client_record_t* target_scanner_get_live_results(uint16_t *count, bool *scanning) {
+  if (scanning) *scanning = is_scanning;
+  if (count) *count = scan_count;
+  return scan_results;
+}
+
 void target_scanner_free_results(void) {
   if (scan_results) {
     heap_caps_free(scan_results);

@@ -31,6 +31,7 @@ bool wifi_sniffer_save_to_internal_flash(const char *filename);
 bool wifi_sniffer_save_to_sd_card(const char *filename);
 void wifi_sniffer_free_buffer(void);
 uint32_t wifi_sniffer_get_packet_count(void);
+uint32_t wifi_sniffer_get_deauth_count(void);
 uint32_t wifi_sniffer_get_buffer_usage(void);
 void wifi_sniffer_set_snaplen(uint16_t len);
 bool wifi_sniffer_start_stream_sd(sniff_type_t type, uint8_t channel, const char *filename);

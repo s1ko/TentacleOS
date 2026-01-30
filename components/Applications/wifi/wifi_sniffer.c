@@ -51,6 +51,7 @@ typedef struct {
 static uint8_t *pcap_buffer = NULL;
 static uint32_t buffer_offset = 0;
 static uint32_t packet_count = 0;
+static uint32_t deauth_count = 0;
 static bool is_sniffing = false;
 static sniff_type_t current_type = SNIFF_TYPE_RAW;
 static uint16_t sniffer_snaplen = 65535;
@@ -301,6 +302,9 @@ static void sniffer_callback(void *buf, wifi_promiscuous_pkt_type_t type) {
   if (fc->type == 0 && (fc->subtype == 8 || fc->subtype == 5)) {
     register_known_ap(mac_header->addr3); 
   }
+  if (fc->type == 0 && fc->subtype == 0xC) {
+    deauth_count++;
+  }
 
   bool save = false;
 
@@ -409,6 +413,7 @@ bool wifi_sniffer_start(sniff_type_t type, uint8_t channel) {
 
   write_pcap_global_header();
   packet_count = 0;
+  deauth_count = 0;
   current_type = type;
 
   memset(sessions, 0, sizeof(sessions));
@@ -584,6 +589,10 @@ void wifi_sniffer_free_buffer(void) {
 
 uint32_t wifi_sniffer_get_packet_count(void) {
   return packet_count;
+}
+
+uint32_t wifi_sniffer_get_deauth_count(void) {
+  return deauth_count;
 }
 
 uint32_t wifi_sniffer_get_buffer_usage(void) {
