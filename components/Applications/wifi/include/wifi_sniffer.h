@@ -34,6 +34,7 @@ uint32_t wifi_sniffer_get_packet_count(void);
 uint32_t wifi_sniffer_get_deauth_count(void);
 uint32_t wifi_sniffer_get_buffer_usage(void);
 void wifi_sniffer_set_snaplen(uint16_t len);
+void wifi_sniffer_set_verbose(bool verbose);
 bool wifi_sniffer_start_stream_sd(sniff_type_t type, uint8_t channel, const char *filename);
 
 #endif // WIFI_SNIFFER_H
