@@ -1,3 +1,18 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+
 #include "console_service.h"
 #include "esp_console.h"
 #include "esp_log.h"
@@ -59,9 +74,35 @@ static int cmd_ip(int argc, char **argv) {
   return 0;
 }
 
+static int cmd_tasks(int argc, char **argv) {
+  const size_t bytes_per_task = 40; /* See vTaskList description */
+  char *task_list_buffer = malloc(uxTaskGetNumberOfTasks() * bytes_per_task);
+
+  if (task_list_buffer == NULL) {
+    printf("Error: Failed to allocate memory for task list.\n");
+    return 1;
+  }
+
+  printf("Task Name       State   Prio    Stack   Num\n");
+  printf("-------------------------------------------\n");
+  vTaskList(task_list_buffer);
+  printf("%s", task_list_buffer);
+  printf("-------------------------------------------\n");
+
+  free(task_list_buffer);
+  return 0;
+}
+
 void register_system_commands(void) {
-  const esp_console_cmd_t cmd_ip_def = {
-    .command = "ip",
+  const esp_console_cmd_t cmd_tasks_def = {
+    .command = "tasks",
+    .help = "List running FreeRTOS tasks",
+    .hint = NULL,
+    .func = &cmd_tasks,
+  };
+  ESP_ERROR_CHECK(esp_console_cmd_register(&cmd_tasks_def));
+
+  const esp_console_cmd_t cmd_ip_def = {    .command = "ip",
     .help = "Show network interfaces",
     .hint = NULL,
     .func = &cmd_ip,
