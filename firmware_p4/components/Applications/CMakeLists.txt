@@ -18,6 +18,15 @@ file(GLOB_RECURSE HOME_UI_SRCS "ui/screens/home/*.c")
 file(GLOB_RECURSE MENU_UI_SRCS "ui/screens/menu/*.c")
 file(GLOB_RECURSE WIFI_UI_SRCS "ui/screens/wifi/*.c")
 list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_scan_menu_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_attack_menu_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_packets_menu_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_sniffer_raw_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_sniffer_attack_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_sniffer_handshake_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_deauth_attack_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_beacon_spam_simple_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_probe_flood_ui.c")
+list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_auth_flood_ui.c")
 list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_scan_ap_ui.c")
 list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_scan_stations_ui.c")
 list(APPEND WIFI_UI_SRCS "ui/screens/wifi/wifi_scan_target_ui.c")
@@ -117,6 +126,9 @@ idf_component_register(SRCS
   "ui/components/footer/include"
   "ui/components/keyboard/include"
   "ui/components/message_box/include"
+  "ui/components/menu_component/include"
+  "ui/components/button/include"
+  "ui/components/terminal/include"
   
 
 
