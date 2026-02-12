@@ -47,8 +47,6 @@ idf_component_register(SRCS
   "ir/protocol_samsung32.c"
   "ir/protocol_sony.c"
   "ir/ir_burst.c"
-  "lvgl_port/lv_port_indev.c"
-  "lvgl_port/lv_port_disp.c"
   "esp_now/service_esp_now.c"
   ${SD_CARD_SERVICE_SRCS}
   ${CONSOLE_SERVICE_SRCS}
@@ -64,7 +62,6 @@ idf_component_register(SRCS
   "storage_api/include"
   "storage_vfs/include"
   "storage_assets/include"
-  "lvgl_port/include"
   "esp_now/include"
   "sd_card/include"
   "console/include"
@@ -78,7 +75,6 @@ idf_component_register(SRCS
     vfs
     fatfs
     esp_timer
-    esp_wifi
     esp_common
     esp_netif
     Drivers
@@ -86,7 +82,6 @@ idf_component_register(SRCS
     esp_http_server
     nvs_flash
     lvgl
-    bt
     littlefs
     cjson
     console 
