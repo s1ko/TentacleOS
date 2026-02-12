@@ -1,7 +1,10 @@
 # compiled output
 /build/
+**/build/
 /lvgl-env/
+**/lvgl-env/
 /temp/
+**/temp/
 LVGLImage.py
 
 .vscode/
