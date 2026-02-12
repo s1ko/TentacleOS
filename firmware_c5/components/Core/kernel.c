@@ -36,6 +36,7 @@
 #include "ui_manager.h"
 #include "sys_monitor.h"
 #include "console_service.h"
+#include "spi_bridge.h"
 
 static const char *TAG = "SAFEGUARD";
 
@@ -66,7 +67,7 @@ void kernel_init(void) {
   buzzer_play_sound_file("buzzer_boot_sequence");
   bq25896_init();
   cc1101_init();
-
+  spi_bridge_slave_init();
 
   buttons_init();
 

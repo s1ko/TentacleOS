@@ -15,7 +15,9 @@
 file(GLOB_RECURSE SD_CARD_SERVICE_SRCS "sd_card/*.c")
 file(GLOB_RECURSE CONSOLE_SERVICE_SRCS "console/*.c")
 file(GLOB_RECURSE CONSOLE_COMMANDS_SRCS "console/commands/*.c")
-
+file(GLOB_RECURSE C5_FLASHER_SRCS "c5_flasher/*.c")
+file(GLOB_RECURSE SPI_BRIDGE_SRCS "spi_bridge/*.c")
+file(GLOB_RECURSE BRIDGE_MANAGER_SRCS "bridge_manager/*.c")
 
 idf_component_register(SRCS 
   "font/font.c"
@@ -53,6 +55,10 @@ idf_component_register(SRCS
   ${SD_CARD_SERVICE_SRCS}
   ${CONSOLE_SERVICE_SRCS}
   ${CONSOLE_COMMANDS_SRCS}
+  ${C5_FLASHER_SRCS}
+  ${SPI_BRIDGE_SRCS}
+  ${BRIDGE_MANAGER_SRCS}
+
   INCLUDE_DIRS 
   "font/include"
   "icons/include"
@@ -68,6 +74,9 @@ idf_component_register(SRCS
   "esp_now/include"
   "sd_card/include"
   "console/include"
+  "spi_bridge/include"
+  "c5_flasher/include"
+  "bridge_manager/include"
 
 
 
