@@ -17,12 +17,12 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "host/ble_hs.h"
 
 #define MAX_SKIMMERS_FOUND 50
 
 typedef struct {
-    ble_addr_t addr;
+    uint8_t addr[6];
+    uint8_t addr_type;
     int8_t rssi;
     char name[32];
     uint32_t last_seen;
