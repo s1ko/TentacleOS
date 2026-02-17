@@ -25,7 +25,9 @@ typedef enum {
     SNIFF_TYPE_PMKID,
     SNIFF_TYPE_RAW
 } sniff_type_t;
+typedef void (*wifi_sniffer_cb_t)(const uint8_t *frame, uint16_t len, int8_t rssi, uint8_t channel);
 bool wifi_sniffer_start(sniff_type_t type, uint8_t channel);
+bool wifi_sniffer_start_stream(sniff_type_t type, uint8_t channel, wifi_sniffer_cb_t cb);
 void wifi_sniffer_stop(void);
 bool wifi_sniffer_save_to_internal_flash(const char *filename);
 bool wifi_sniffer_save_to_sd_card(const char *filename);
