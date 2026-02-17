@@ -18,10 +18,12 @@ file(GLOB_RECURSE CONSOLE_COMMANDS_SRCS "console/commands/*.c")
 file(GLOB_RECURSE C5_FLASHER_SRCS "c5_flasher/*.c")
 file(GLOB_RECURSE SPI_BRIDGE_SRCS "spi_bridge/*.c")
 file(GLOB_RECURSE BRIDGE_MANAGER_SRCS "bridge_manager/*.c")
+file(GLOB_RECURSE BT_SERVICE_SRCS "bluetooth/*.c")
 
 idf_component_register(SRCS 
   "font/font.c"
   "icons/icons.c"
+  "wifi/wifi_service.c"
 
   "storage_api/storage_impl.c"
   "storage_api/storage_init.c"
@@ -53,10 +55,12 @@ idf_component_register(SRCS
   ${C5_FLASHER_SRCS}
   ${SPI_BRIDGE_SRCS}
   ${BRIDGE_MANAGER_SRCS}
+  ${BT_SERVICE_SRCS}
 
   INCLUDE_DIRS 
   "font/include"
   "icons/include"
+  "wifi/include"
   "ir/include"
   "storage_api/include"
   "storage_vfs/include"
@@ -67,6 +71,7 @@ idf_component_register(SRCS
   "spi_bridge/include"
   "c5_flasher/include"
   "bridge_manager/include"
+  "bluetooth/include"
 
 
 
