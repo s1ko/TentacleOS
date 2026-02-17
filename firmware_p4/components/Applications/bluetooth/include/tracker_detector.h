@@ -17,7 +17,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "host/ble_hs.h"
 
 #define MAX_TRACKERS_FOUND 50
 
@@ -30,7 +29,8 @@ typedef enum {
 } tracker_type_t;
 
 typedef struct {
-    ble_addr_t addr;
+    uint8_t addr[6];
+    uint8_t addr_type;
     int8_t rssi;
     tracker_type_t type;
     char type_str[16];
