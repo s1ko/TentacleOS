@@ -8,6 +8,9 @@
 #include "buzzer.h"
 #include "esp_log.h"
 #include "lvgl.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include <stdlib.h>
 
 static const char *TAG = "UI_WIFI_SCAN_AP";
 static lv_obj_t * screen_scan_ap = NULL;
@@ -18,6 +21,11 @@ static lv_style_t style_item;
 static bool styles_initialized = false;
 
 extern lv_group_t * main_group;
+
+static wifi_ap_record_t *scan_results = NULL;
+static uint16_t scan_count = 0;
+static uint16_t populate_index = 0;
+static lv_timer_t *populate_timer = NULL;
 
 static const char * authmode_to_str(wifi_auth_mode_t mode) {
     switch (mode) {
@@ -87,90 +95,173 @@ static void screen_event_cb(lv_event_t * e) {
     if (lv_event_get_code(e) != LV_EVENT_KEY) return;
     uint32_t key = lv_event_get_key(e);
     if (key == LV_KEY_ESC || key == LV_KEY_LEFT) {
+        if (populate_timer) {
+            lv_timer_del(populate_timer);
+            populate_timer = NULL;
+        }
+        if (scan_results) {
+            free(scan_results);
+            scan_results = NULL;
+        }
+        scan_count = 0;
+        populate_index = 0;
         ui_switch_screen(SCREEN_WIFI_SCAN_MENU);
     }
 }
 
-static void populate_list(wifi_ap_record_t * results, uint16_t count) {
-    if (!list_cont) return;
+static void add_ap_item(const wifi_ap_record_t * ap) {
+    lv_obj_t * item = lv_obj_create(list_cont);
+    lv_obj_set_size(item, lv_pct(100), 64);
+    lv_obj_add_style(item, &style_item, 0);
+    lv_obj_set_flex_flow(item, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(item, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_clear_flag(item, LV_OBJ_FLAG_SCROLLABLE);
 
-    if (loading_label) {
-        lv_obj_del(loading_label);
-        loading_label = NULL;
+    lv_obj_t * icon = lv_label_create(item);
+    lv_label_set_text(icon, LV_SYMBOL_WIFI);
+    lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
+    lv_obj_set_style_text_opa(icon, rssi_opa(ap->rssi), 0);
+    lv_obj_set_style_margin_right(icon, 6, 0);
+
+    lv_obj_t * col = lv_obj_create(item);
+    lv_obj_set_size(col, lv_pct(100), lv_pct(100));
+    lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_bg_opa(col, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(col, 0, 0);
+    lv_obj_set_style_pad_all(col, 0, 0);
+    lv_obj_set_style_pad_gap(col, 2, 0);
+    lv_obj_clear_flag(col, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t * line1 = lv_label_create(col);
+    lv_obj_set_width(line1, lv_pct(100));
+    lv_label_set_text_fmt(line1, "%s  CH %d  %ddBm", (char *)ap->ssid, ap->primary, ap->rssi);
+    lv_label_set_long_mode(line1, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_color(line1, current_theme.text_main, 0);
+
+    lv_obj_t * line2 = lv_label_create(col);
+    lv_obj_set_width(line2, lv_pct(100));
+    lv_label_set_text_fmt(
+        line2,
+        "MAC %02X:%02X:%02X:%02X:%02X:%02X  %s",
+        ap->bssid[0], ap->bssid[1], ap->bssid[2],
+        ap->bssid[3], ap->bssid[4], ap->bssid[5],
+        authmode_to_str(ap->authmode)
+    );
+    lv_label_set_long_mode(line2, LV_LABEL_LONG_SCROLL_CIRCULAR);
+
+    if (ap->authmode == WIFI_AUTH_OPEN) {
+        lv_obj_set_style_text_color(line2, lv_color_hex(0x00FF00), 0);
+    } else {
+        lv_obj_set_style_text_color(line2, lv_color_hex(0xFF3333), 0);
     }
 
-    if (main_group) lv_group_remove_all_objs(main_group);
+    lv_obj_add_event_cb(item, item_focus_cb, LV_EVENT_ALL, NULL);
+    if (main_group) lv_group_add_obj(main_group, item);
+}
 
-    if (!results || count == 0) {
-        lv_obj_t * empty = lv_label_create(list_cont);
-        lv_label_set_text(empty, "NO NETWORKS FOUND");
-        lv_obj_set_style_text_color(empty, current_theme.text_main, 0);
-        if (main_group) lv_group_add_obj(main_group, empty);
+static void populate_timer_cb(lv_timer_t * t) {
+    (void)t;
+    if (!list_cont) return;
+
+    if (!scan_results || scan_count == 0) {
+        if (populate_timer) {
+            lv_timer_del(populate_timer);
+            populate_timer = NULL;
+        }
         return;
     }
 
-    for (uint16_t i = 0; i < count; i++) {
-        wifi_ap_record_t * ap = &results[i];
+    uint16_t remaining = scan_count - populate_index;
+    uint16_t batch = (remaining > 3) ? 3 : remaining;
+    for (uint16_t i = 0; i < batch; i++) {
+        add_ap_item(&scan_results[populate_index]);
+        populate_index++;
+    }
 
-        lv_obj_t * item = lv_obj_create(list_cont);
-        lv_obj_set_size(item, lv_pct(100), 64);
-        lv_obj_add_style(item, &style_item, 0);
-        lv_obj_set_flex_flow(item, LV_FLEX_FLOW_ROW);
-        lv_obj_set_flex_align(item, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-        lv_obj_clear_flag(item, LV_OBJ_FLAG_SCROLLABLE);
+    if (populate_index >= scan_count) {
+        if (main_group) {
+            lv_obj_t * first = lv_obj_get_child(list_cont, 0);
+            if (first) lv_group_focus_obj(first);
+        }
+        if (populate_timer) {
+            lv_timer_del(populate_timer);
+            populate_timer = NULL;
+        }
+    }
+}
 
-        lv_obj_t * icon = lv_label_create(item);
-        lv_label_set_text(icon, LV_SYMBOL_WIFI);
-        lv_obj_set_style_text_color(icon, current_theme.text_main, 0);
-        lv_obj_set_style_text_opa(icon, rssi_opa(ap->rssi), 0);
-        lv_obj_set_style_margin_right(icon, 6, 0);
+static void scan_worker_task(void *arg) {
+    (void)arg;
+    wifi_service_scan();
+    uint16_t count = wifi_service_get_ap_count();
+    if (count > WIFI_SCAN_LIST_SIZE) {
+        count = WIFI_SCAN_LIST_SIZE;
+    }
 
-        lv_obj_t * col = lv_obj_create(item);
-        lv_obj_set_size(col, lv_pct(100), lv_pct(100));
-        lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_style_bg_opa(col, LV_OPA_TRANSP, 0);
-        lv_obj_set_style_border_width(col, 0, 0);
-        lv_obj_set_style_pad_all(col, 0, 0);
-        lv_obj_set_style_pad_gap(col, 2, 0);
-        lv_obj_clear_flag(col, LV_OBJ_FLAG_SCROLLABLE);
-
-        lv_obj_t * line1 = lv_label_create(col);
-        lv_obj_set_width(line1, lv_pct(100));
-        lv_label_set_text_fmt(line1, "%s  CH %d  %ddBm", (char *)ap->ssid, ap->primary, ap->rssi);
-        lv_label_set_long_mode(line1, LV_LABEL_LONG_SCROLL_CIRCULAR);
-        lv_obj_set_style_text_color(line1, current_theme.text_main, 0);
-
-        lv_obj_t * line2 = lv_label_create(col);
-        lv_obj_set_width(line2, lv_pct(100));
-        lv_label_set_text_fmt(
-            line2,
-            "MAC %02X:%02X:%02X:%02X:%02X:%02X  %s",
-            ap->bssid[0], ap->bssid[1], ap->bssid[2],
-            ap->bssid[3], ap->bssid[4], ap->bssid[5],
-            authmode_to_str(ap->authmode)
-        );
-        lv_label_set_long_mode(line2, LV_LABEL_LONG_SCROLL_CIRCULAR);
-
-        if (ap->authmode == WIFI_AUTH_OPEN) {
-            lv_obj_set_style_text_color(line2, lv_color_hex(0x00FF00), 0);
+    wifi_ap_record_t *results = NULL;
+    if (count > 0) {
+        results = (wifi_ap_record_t *)calloc(count, sizeof(wifi_ap_record_t));
+        if (results) {
+            for (uint16_t i = 0; i < count; i++) {
+                wifi_ap_record_t *rec = wifi_service_get_ap_record(i);
+                if (rec) {
+                    results[i] = *rec;
+                }
+            }
         } else {
-            lv_obj_set_style_text_color(line2, lv_color_hex(0xFF3333), 0);
+            count = 0;
+        }
+    }
+
+    if (ui_acquire()) {
+        if (loading_label) {
+            lv_obj_del(loading_label);
+            loading_label = NULL;
         }
 
-        lv_obj_add_event_cb(item, item_focus_cb, LV_EVENT_ALL, NULL);
-        if (main_group) lv_group_add_obj(main_group, item);
+        if (main_group) lv_group_remove_all_objs(main_group);
+        if (list_cont) lv_obj_clean(list_cont);
+
+        if (!results || count == 0) {
+            lv_obj_t * empty = lv_label_create(list_cont);
+            lv_label_set_text(empty, "NO NETWORKS FOUND");
+            lv_obj_set_style_text_color(empty, current_theme.text_main, 0);
+            if (main_group) lv_group_add_obj(main_group, empty);
+            if (results) free(results);
+        } else {
+            if (scan_results) free(scan_results);
+            scan_results = results;
+            scan_count = count;
+            populate_index = 0;
+            if (populate_timer) {
+                lv_timer_del(populate_timer);
+                populate_timer = NULL;
+            }
+            populate_timer = lv_timer_create(populate_timer_cb, 20, NULL);
+        }
+        ui_release();
+    } else {
+        if (results) free(results);
     }
 
-    if (main_group) {
-        lv_obj_t * first = lv_obj_get_child(list_cont, 0);
-        if (first) lv_group_focus_obj(first);
-    }
+    vTaskDelete(NULL);
 }
 
 void ui_wifi_scan_ap_open(void) {
     init_styles();
 
     if (screen_scan_ap) lv_obj_del(screen_scan_ap);
+    if (populate_timer) {
+        lv_timer_del(populate_timer);
+        populate_timer = NULL;
+    }
+    if (scan_results) {
+        free(scan_results);
+        scan_results = NULL;
+    }
+    scan_count = 0;
+    populate_index = 0;
+
     screen_scan_ap = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_scan_ap, current_theme.screen_base, 0);
     lv_obj_clear_flag(screen_scan_ap, LV_OBJ_FLAG_SCROLLABLE);
@@ -200,8 +291,5 @@ void ui_wifi_scan_ap_open(void) {
         lv_label_set_text(loading_label, "WIFI OFF");
         return;
     }
-    wifi_service_scan();
-    uint16_t count = wifi_service_get_ap_count();
-    wifi_ap_record_t *results = (count > 0) ? wifi_service_get_ap_record(0) : NULL;
-    populate_list(results, count);
+    xTaskCreate(scan_worker_task, "WifiScanAP", 4096, NULL, 5, NULL);
 }
