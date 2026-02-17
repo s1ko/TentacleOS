@@ -19,8 +19,7 @@
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 #include <string.h>
-#include "kernel.h" 
-#include "ui_manager.h"
+#include "kernel.h"
 
 static const char *TAG = "SYS_MONITOR";
 
@@ -61,22 +60,6 @@ static void sys_monitor_task(void *pvParameters) {
         if (watermark < CRITICAL_STACK_THRESHOLD) {
           ESP_LOGE(TAG, "!!! SECURITY ALERT !!! Task [%s] has CRITICAL STACK: %lu bytes free. TERMINATING TASK.", 
                    pxTaskStatusArray[i].pcTaskName, (unsigned long)watermark);
-
-          // SPECIAL HANDLING FOR UI TASK
-          if (strcmp(pxTaskStatusArray[i].pcTaskName, "UI Task") == 0) {
-            ESP_LOGE(TAG, "UI Task crash detected! Initiating emergency restart sequence...");
-            vTaskDelete(pxTaskStatusArray[i].xHandle);
-            ui_hard_restart();
-            continue; 
-          }
-
-          ui_switch_screen(SCREEN_HOME);
-
-          char msg_buf[128];
-          snprintf(msg_buf, sizeof(msg_buf), "Process '%s' Terminated!\nLow Stack (%lu B).", 
-                   pxTaskStatusArray[i].pcTaskName, (unsigned long)watermark);
-
-          safeguard_alert("SYSTEM PROTECTED", msg_buf);
 
           if (pxTaskStatusArray[i].xHandle != xTaskGetCurrentTaskHandle()) {
             vTaskDelete(pxTaskStatusArray[i].xHandle);
