@@ -5,10 +5,9 @@
 #include "ble_connect_flood.h"
 #include "skimmer_detector.h"
 #include "tracker_detector.h"
+#include "spi_bridge.h"
 #include "esp_log.h"
 #include <string.h>
-
-static const char *TAG = "BT_DISPATCHER";
 
 spi_status_t bt_dispatcher_execute(spi_id_t id, const uint8_t *payload, uint8_t len, 
                                   uint8_t *out_resp_payload, uint8_t *out_resp_len) {
