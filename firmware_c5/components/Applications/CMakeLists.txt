@@ -21,7 +21,6 @@ file(GLOB_RECURSE ESPNOW_CHAT_APP_SRCS "espnow_chat/*.c")
 file(GLOB_RECURSE WIFI_APP_SRCS "wifi/*.c")
 
 idf_component_register(SRCS 
-  "play/play.c"
   ${WIFI_APP_SRCS}
   ${ESPNOW_CHAT_APP_SRCS}
   ${BADUSB_APP_SRCS}
@@ -29,7 +28,6 @@ idf_component_register(SRCS
   ${SUBGHZ_APP_SRCS}
 
   INCLUDE_DIRS 
-  "play/include"
   "wifi/include"   
   "espnow_chat/include"
   "bad_usb/include"
