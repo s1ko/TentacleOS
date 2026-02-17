@@ -191,6 +191,10 @@ probe_record_t* probe_monitor_get_results(uint16_t *count) {
   return scan_results;
 }
 
+const uint16_t* probe_monitor_get_count_ptr(void) {
+  return &scan_count;
+}
+
 void probe_monitor_free_results(void) {
   probe_monitor_stop();
   if (scan_results) {
