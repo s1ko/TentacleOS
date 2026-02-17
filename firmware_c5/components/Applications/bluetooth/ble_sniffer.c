@@ -20,6 +20,7 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_heap_caps.h"
+#include "spi_bridge.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -42,6 +43,17 @@ static StackType_t *sniffer_task_stack = NULL;
 static StaticTask_t *sniffer_task_tcb = NULL;
 static uint8_t *sniffer_queue_storage = NULL;
 static StaticQueue_t *sniffer_queue_struct = NULL;
+
+static void *sniffer_alloc(size_t size, const char *label) {
+  void *ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+  if (!ptr) {
+    ptr = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (ptr) {
+      ESP_LOGW(TAG, "PSRAM alloc failed for %s, using internal RAM", label);
+    }
+  }
+  return ptr;
+}
 
 static void sniffer_packet_handler(const uint8_t *addr, uint8_t addr_type, int rssi, const uint8_t *data, uint16_t len) {
   if (sniffer_queue) {
@@ -71,6 +83,16 @@ static void sniffer_task(void *pvParameters) {
         printf("%02X ", packet.data[i]);
       }
       printf("\n");
+
+      if (spi_bridge_stream_is_enabled(SPI_ID_BT_APP_SNIFFER)) {
+        spi_ble_sniffer_frame_t stream = {0};
+        memcpy(stream.addr, packet.addr, 6);
+        stream.addr_type = packet.addr_type;
+        stream.rssi = (int8_t)packet.rssi;
+        stream.len = packet.len;
+        memcpy(stream.data, packet.data, packet.len);
+        spi_bridge_stream_push(SPI_ID_BT_APP_SNIFFER, (const uint8_t *)&stream, sizeof(stream));
+      }
     }
   }
 }
@@ -80,11 +102,11 @@ esp_err_t ble_sniffer_start(void) {
 
   ESP_LOGI(TAG, "Starting BLE Packet Sniffer...");
 
-  sniffer_task_stack = (StackType_t *)heap_caps_malloc(SNIFFER_TASK_STACK_SIZE * sizeof(StackType_t), MALLOC_CAP_SPIRAM);
-  sniffer_task_tcb = (StaticTask_t *)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_SPIRAM);
+  sniffer_task_stack = (StackType_t *)sniffer_alloc(SNIFFER_TASK_STACK_SIZE * sizeof(StackType_t), "task stack");
+  sniffer_task_tcb = (StaticTask_t *)sniffer_alloc(sizeof(StaticTask_t), "task TCB");
 
-  sniffer_queue_struct = (StaticQueue_t *)heap_caps_malloc(sizeof(StaticQueue_t), MALLOC_CAP_SPIRAM);
-  sniffer_queue_storage = (uint8_t *)heap_caps_malloc(SNIFFER_QUEUE_SIZE * sizeof(sniffer_packet_t), MALLOC_CAP_SPIRAM);
+  sniffer_queue_struct = (StaticQueue_t *)sniffer_alloc(sizeof(StaticQueue_t), "queue struct");
+  sniffer_queue_storage = (uint8_t *)sniffer_alloc(SNIFFER_QUEUE_SIZE * sizeof(sniffer_packet_t), "queue storage");
 
   if (!sniffer_task_stack || !sniffer_task_tcb || !sniffer_queue_struct || !sniffer_queue_storage) {
     ESP_LOGE(TAG, "Failed to allocate PSRAM memory for sniffer");
