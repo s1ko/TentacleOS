@@ -1,3 +1,17 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "subghz_protocol_defs.h"
 #include <string.h>
 #include <stdlib.h>
@@ -9,11 +23,11 @@
  */
 
 typedef struct {
-    uint16_t pulseLength;
-    struct { uint8_t high; uint8_t low; } syncFactor;
-    struct { uint8_t high; uint8_t low; } zero;
-    struct { uint8_t high; uint8_t low; } one;
-    bool invertedSignal;
+  uint16_t pulseLength;
+  struct { uint8_t high; uint8_t low; } syncFactor;
+  struct { uint8_t high; uint8_t low; } zero;
+  struct { uint8_t high; uint8_t low; } one;
+  bool invertedSignal;
 } rcswitch_proto_t;
 
 static const rcswitch_proto_t proto[] = {
@@ -35,99 +49,99 @@ static const rcswitch_proto_t proto[] = {
 #define RECEIVE_TOLERANCE 60 // 60% as per original RCSwitch
 
 static inline uint32_t diff(uint32_t a, uint32_t b) {
-    return (a > b) ? (a - b) : (b - a);
+  return (a > b) ? (a - b) : (b - a);
 }
 
 static bool protocol_rcswitch_decode(const int32_t* raw_data, size_t count, subghz_data_t* out_data) {
-    if (count < 10) return false;
+  if (count < 10) return false;
 
-    // RCSwitch logic: Search for a sync gap, calculate base delay, then decode.
-    for (int p = 0; p < NUM_PROTO; p++) {
-        const rcswitch_proto_t* pro = &proto[p];
-        
-        for (size_t i = 0; i < count - 1; i++) {
-            // Check Sync Polarity
-            bool first_is_high = (raw_data[i] > 0);
-            bool second_is_high = (raw_data[i+1] > 0);
-            
-            if (pro->invertedSignal) {
-                if (first_is_high || !second_is_high) continue; 
-            } else {
-                if (!first_is_high || second_is_high) continue;
-            }
+  // RCSwitch logic: Search for a sync gap, calculate base delay, then decode.
+  for (int p = 0; p < NUM_PROTO; p++) {
+    const rcswitch_proto_t* pro = &proto[p];
 
-            uint32_t dur1 = abs(raw_data[i]);
-            uint32_t dur2 = abs(raw_data[i+1]);
+    for (size_t i = 0; i < count - 1; i++) {
+      // Check Sync Polarity
+      bool first_is_high = (raw_data[i] > 0);
+      bool second_is_high = (raw_data[i+1] > 0);
 
-            // Calculate base delay from the longer part of the sync factor
-            uint32_t sync_long_factor = (pro->syncFactor.low > pro->syncFactor.high) ? pro->syncFactor.low : pro->syncFactor.high;
-            uint32_t dur_long = (pro->syncFactor.low > pro->syncFactor.high) ? dur2 : dur1;
-            
-            if (sync_long_factor == 0) continue;
-            uint32_t delay = dur_long / sync_long_factor;
-            if (delay < 50 || delay > 1200) continue; 
+      if (pro->invertedSignal) {
+        if (first_is_high || !second_is_high) continue; 
+      } else {
+        if (!first_is_high || second_is_high) continue;
+      }
 
-            uint32_t tolerance = delay * RECEIVE_TOLERANCE / 100;
+      uint32_t dur1 = abs(raw_data[i]);
+      uint32_t dur2 = abs(raw_data[i+1]);
 
-            // Validate entire Sync Bit
-            if (diff(dur1, delay * pro->syncFactor.high) > tolerance ||
-                diff(dur2, delay * pro->syncFactor.low) > tolerance) {
-                continue;
-            }
+      // Calculate base delay from the longer part of the sync factor
+      uint32_t sync_long_factor = (pro->syncFactor.low > pro->syncFactor.high) ? pro->syncFactor.low : pro->syncFactor.high;
+      uint32_t dur_long = (pro->syncFactor.low > pro->syncFactor.high) ? dur2 : dur1;
 
-            // Sync Found! Decode bits using derived 'delay'
-            uint32_t code = 0;
-            int bit_count = 0;
-            size_t k = i + 2;
+      if (sync_long_factor == 0) continue;
+      uint32_t delay = dur_long / sync_long_factor;
+      if (delay < 50 || delay > 1200) continue; 
 
-            while (k < count - 1 && bit_count < 32) {
-                uint32_t d_p = abs(raw_data[k]);
-                uint32_t d_g = abs(raw_data[k+1]);
-                bool p_high = (raw_data[k] > 0);
-                bool g_high = (raw_data[k+1] > 0);
+      uint32_t tolerance = delay * RECEIVE_TOLERANCE / 100;
 
-                // Polarity Check for Bits
-                if (pro->invertedSignal) {
-                    if (p_high || !g_high) break;
-                } else {
-                    if (!p_high || g_high) break;
-                }
+      // Validate entire Sync Bit
+      if (diff(dur1, delay * pro->syncFactor.high) > tolerance ||
+        diff(dur2, delay * pro->syncFactor.low) > tolerance) {
+        continue;
+      }
 
-                // Match Zero
-                if (diff(d_p, delay * pro->zero.high) < tolerance &&
-                    diff(d_g, delay * pro->zero.low) < tolerance) {
-                    code <<= 1;
-                    bit_count++;
-                }
-                // Match One
-                else if (diff(d_p, delay * pro->one.high) < tolerance &&
-                         diff(d_g, delay * pro->one.low) < tolerance) {
-                    code = (code << 1) | 1;
-                    bit_count++;
-                } else {
-                    break; 
-                }
-                k += 2;
-            }
+      // Sync Found! Decode bits using derived 'delay'
+      uint32_t code = 0;
+      int bit_count = 0;
+      size_t k = i + 2;
 
-            if (bit_count >= 12) {
-                static char name_buf[32];
-                snprintf(name_buf, sizeof(name_buf), "RCSwitch(P%d)", p + 1);
-                out_data->protocol_name = name_buf;
-                out_data->bit_count = bit_count;
-                out_data->raw_value = code;
-                out_data->serial = code;
-                out_data->btn = 0;
-                return true;
-            }
+      while (k < count - 1 && bit_count < 32) {
+        uint32_t d_p = abs(raw_data[k]);
+        uint32_t d_g = abs(raw_data[k+1]);
+        bool p_high = (raw_data[k] > 0);
+        bool g_high = (raw_data[k+1] > 0);
+
+        // Polarity Check for Bits
+        if (pro->invertedSignal) {
+          if (p_high || !g_high) break;
+        } else {
+          if (!p_high || g_high) break;
         }
-    }
 
-    return false;
+        // Match Zero
+        if (diff(d_p, delay * pro->zero.high) < tolerance &&
+          diff(d_g, delay * pro->zero.low) < tolerance) {
+          code <<= 1;
+          bit_count++;
+        }
+        // Match One
+        else if (diff(d_p, delay * pro->one.high) < tolerance &&
+          diff(d_g, delay * pro->one.low) < tolerance) {
+          code = (code << 1) | 1;
+          bit_count++;
+        } else {
+          break; 
+        }
+        k += 2;
+      }
+
+      if (bit_count >= 12) {
+        static char name_buf[32];
+        snprintf(name_buf, sizeof(name_buf), "RCSwitch(P%d)", p + 1);
+        out_data->protocol_name = name_buf;
+        out_data->bit_count = bit_count;
+        out_data->raw_value = code;
+        out_data->serial = code;
+        out_data->btn = 0;
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 subghz_protocol_t protocol_rcswitch = {
-    .name = "RCSwitch",
-    .decode = protocol_rcswitch_decode,
-    .encode = NULL
+  .name = "RCSwitch",
+  .decode = protocol_rcswitch_decode,
+  .encode = NULL
 };
