@@ -26,7 +26,7 @@
 
 static const char *TAG = "SUBGHZ_TX";
 
-#define RMT_TX_GPIO       8  // GDO0 (GPIO_SDA_PIN)
+#define RMT_TX_GPIO       GPIO_SCL_PIN  // GDO2
 #define RMT_RESOLUTION_HZ 1000000 // 1MHz -> 1us per tick
 
 #define TX_QUEUE_SIZE     10
