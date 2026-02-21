@@ -1,0 +1,69 @@
+// Copyright (c) 2025 HIGH CODE LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+ 
+#include "st25r3916_fifo.h"
+#include "st25r3916_reg.h"
+#include "st25r3916_cmd.h"
+#include "hb_nfc_spi.h"
+#include "hb_nfc_timer.h"
+
+uint16_t st25r_fifo_count(void)
+{
+    uint8_t lsb, msb;
+    hb_spi_reg_read(REG_FIFO_STATUS1, &lsb);
+    hb_spi_reg_read(REG_FIFO_STATUS2, &msb);
+    return (uint16_t)(((msb & 0xC0) << 2) | lsb);
+}
+
+void st25r_fifo_clear(void)
+{
+    /*
+     write 0x02
+     */
+    (void)0;
+}
+
+hb_nfc_err_t st25r_fifo_load(const uint8_t* data, size_t len)
+{
+    return hb_spi_fifo_load(data, len);
+}
+
+hb_nfc_err_t st25r_fifo_read(uint8_t* data, size_t len)
+{
+    return hb_spi_fifo_read(data, len);
+}
+
+void st25r_set_tx_bytes(uint16_t nbytes, uint8_t nbtx_bits)
+{
+    uint8_t reg1 = (uint8_t)((nbytes >> 5) & 0xFF);
+    uint8_t reg2 = (uint8_t)(((nbytes & 0x1F) << 3) | (nbtx_bits & 0x07));
+    hb_spi_reg_write(REG_NUM_TX_BYTES1, reg1);
+    hb_spi_reg_write(REG_NUM_TX_BYTES2, reg2);
+}
+
+int st25r_fifo_wait(size_t min_bytes, int timeout_ms, uint16_t* final_count)
+{
+    uint16_t count = 0;
+    for (int i = 0; i < timeout_ms; i++) {
+        count = st25r_fifo_count();
+        if (count >= min_bytes) {
+            if (final_count) *final_count = count;
+            return (int)count;
+        }
+        hb_delay_us(1000);
+    }
+    count = st25r_fifo_count();
+    if (final_count) *final_count = count;
+    return (int)count;
+}
