@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include "cc1101.h"
 
 typedef struct {
     int32_t *items;
@@ -29,12 +30,7 @@ typedef enum {
     SUBGHZ_MODE_RAW   
 } subghz_mode_t;
 
-typedef enum {
-    SUBGHZ_MODULATION_ASK, // Amplitude Shift Keying (OOK) - Padrão
-    SUBGHZ_MODULATION_FSK  // Frequency Shift Keying (Intelbras, etc)
-} subghz_modulation_t;
-
-void subghz_receiver_start(subghz_mode_t mode, subghz_modulation_t mod, uint32_t freq);
+void subghz_receiver_start(subghz_mode_t mode, cc1101_preset_t preset, uint32_t freq);
 void subghz_receiver_stop(void);
 bool subghz_receiver_is_running(void);
 

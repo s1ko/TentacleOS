@@ -23,6 +23,8 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "subghz_protocol_registry.h"
+#include "subghz_analyzer.h"
+#include "subghz_storage.h"
 
 static const char *TAG = "SUBGHZ_RX";
 
@@ -55,13 +57,19 @@ static const size_t HOOP_FREQS_COUNT = sizeof(HOOP_FREQS) / sizeof(HOOP_FREQS[0]
 static TaskHandle_t rx_task_handle = NULL;
 static volatile bool s_is_running = false;
 static subghz_mode_t s_rx_mode = SUBGHZ_MODE_SCAN;
-static subghz_modulation_t s_rx_mod = SUBGHZ_MODULATION_ASK;
+static cc1101_preset_t s_rx_preset = CC1101_PRESET_OOK_800KHZ;
 static uint32_t s_rx_freq = 433920000;
 static bool s_hopping_active = false;
 static int s_hoop_idx = 0;
+static uint32_t s_capture_count = 0;
 
 static rmt_channel_handle_t rx_channel = NULL;
 static QueueHandle_t rx_queue = NULL;
+
+static void get_dynamic_filename(char* out_name, const char* prefix) {
+    s_capture_count++;
+    sprintf(out_name, "%s_%03lu", prefix, (unsigned long)s_capture_count);
+}
 
 static bool subghz_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
 {
@@ -72,9 +80,9 @@ static bool subghz_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_d
 }
 
 static void subghz_rx_task(void *pvParameters) {
-  ESP_LOGI(TAG, "Starting RMT RX Task - Mode: %s, Mod: %s, Freq: %lu", 
+  ESP_LOGI(TAG, "Starting RMT RX Task - Mode: %s, Preset: %d, Freq: %lu", 
            s_rx_mode == SUBGHZ_MODE_RAW ? "RAW" : "SCAN",
-           s_rx_mod == SUBGHZ_MODULATION_FSK ? "FSK" : "ASK",
+           (int)s_rx_preset,
            s_rx_freq);
 
   // 1. Configure RMT RX Channel
@@ -97,11 +105,8 @@ static void subghz_rx_task(void *pvParameters) {
 
   ESP_ERROR_CHECK(rmt_enable(rx_channel));
 
-  if (s_rx_mod == SUBGHZ_MODULATION_FSK) {
-    cc1101_enable_fsk_mode(s_rx_freq);
-  } else {
-    cc1101_enable_async_mode(s_rx_freq); // ASK
-  }
+  // Use the requested preset
+  cc1101_set_preset(s_rx_preset, s_rx_freq);
 
   // 5. Start Receiving Loop
   s_is_running = true;
@@ -176,27 +181,53 @@ static void subghz_rx_task(void *pvParameters) {
         }
 
         if (decode_buffer && decode_idx > 0) {
+          char filename[32];
           if (s_rx_mode == SUBGHZ_MODE_RAW) {
-            // RAW MODE: Always print
             printf("RAW: ");
             for (size_t k = 0; k < decode_idx; k++) {
               printf("%ld ", (long)decode_buffer[k]);
             }
             printf("\n");
+            
+            get_dynamic_filename(filename, "RAW");
+            subghz_storage_save_raw(filename, decode_buffer, decode_idx, s_rx_freq);
           } else {
             // SCAN MODE: Try to decode
             subghz_data_t decoded = {0};
-            if (subghz_process_raw(decode_buffer, decode_idx, &decoded)) {
+            if (subghz_protocol_registry_decode_all(decode_buffer, decode_idx, &decoded)) {
               ESP_LOGI(TAG, "DECODED: Protocol: %s | Serial: 0x%lX | Btn: 0x%X | Bits: %d | Freq: %lu", 
                        decoded.protocol_name, decoded.serial, decoded.btn, decoded.bit_count, (long unsigned int)s_rx_freq);
+              
+              subghz_analyzer_result_t analysis = {0};
+              subghz_analyzer_process(decode_buffer, decode_idx, &analysis);
+              get_dynamic_filename(filename, "DEC");
+              subghz_storage_save_decoded(filename, &decoded, s_rx_freq, analysis.estimated_te);
             } else {
-              // DEBUG: Show RAW even if failed, to help calibrate decoders
-              ESP_LOGW(TAG, "Unknown Protocol detected (Length: %d) at %lu Hz. RAW Data below:", (int)decode_idx, (long unsigned int)s_rx_freq);
-              printf("RAW: ");
-              for (size_t k = 0; k < decode_idx; k++) {
+              // SCAN MODE FAILED: Run Analyzer
+              subghz_analyzer_result_t analysis = {0};
+              if (subghz_analyzer_process(decode_buffer, decode_idx, &analysis)) {
+                  ESP_LOGW(TAG, "Unknown Signal: TE ~%luus | Peaks: %s | Count: %d | Freq: %lu",
+                           (unsigned long)analysis.estimated_te, analysis.modulation_hint, (int)decode_idx, (long unsigned int)s_rx_freq);
+                  
+                  get_dynamic_filename(filename, "UNK");
+                  subghz_storage_save_raw(filename, decode_buffer, decode_idx, s_rx_freq);
+
+                  if (analysis.bitstream_len > 0) {
+                      char hex_buf[65] = {0};
+                      size_t bytes_to_show = (analysis.bitstream_len / 8);
+                      if (bytes_to_show > 32) bytes_to_show = 32;
+                      for (size_t b = 0; b < bytes_to_show; b++) {
+                          sprintf(&hex_buf[b*2], "%02X", analysis.bitstream[b]);
+                      }
+                      ESP_LOGI(TAG, "Recovered Bitstream (Hex): %s...", hex_buf);
+                  }
+              }
+              
+              printf("RAW (first 20): ");
+              for (size_t k = 0; k < (decode_idx > 20 ? 20 : decode_idx); k++) {
                 printf("%ld ", (long)decode_buffer[k]);
               }
-              printf("\n");
+              printf("...\n");
             }
           }
         }
@@ -222,10 +253,10 @@ cleanup:
   vTaskDelete(NULL);
 }
 
-void subghz_receiver_start(subghz_mode_t mode, subghz_modulation_t mod, uint32_t freq) {
+void subghz_receiver_start(subghz_mode_t mode, cc1101_preset_t preset, uint32_t freq) {
   if (s_is_running) return;
   s_rx_mode = mode;
-  s_rx_mod = mod;
+  s_rx_preset = preset;
 
   if (freq == 0) {
     s_hopping_active = true;
@@ -236,7 +267,7 @@ void subghz_receiver_start(subghz_mode_t mode, subghz_modulation_t mod, uint32_t
     s_rx_freq = freq;
   }
 
-  xTaskCreatePinnedToCore(subghz_rx_task, "subghz_rx", 4096, NULL, 5, &rx_task_handle, 1);
+  xTaskCreatePinnedToCore(subghz_rx_task, "subghz_rx", 8192, NULL, 5, &rx_task_handle, 1);
 }
 
 void subghz_receiver_stop(void) {
