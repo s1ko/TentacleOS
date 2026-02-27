@@ -12,15 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #ifndef SUBGHZ_SPECTRUM_H
 #define SUBGHZ_SPECTRUM_H
 
-#define SPECTRUM_SAMPLES    80
-extern float spectrum_data[SPECTRUM_SAMPLES];
+#include <stdint.h>
+#include <stdbool.h>
 
-void subghz_spectrum_start(void);
+#define SPECTRUM_SAMPLES    80
+
+typedef struct {
+    uint32_t center_freq;
+    uint32_t span_hz;
+    uint32_t start_freq;
+    uint32_t step_hz;
+    float dbm_values[SPECTRUM_SAMPLES];
+    uint64_t timestamp;
+} subghz_spectrum_line_t;
+
+void subghz_spectrum_start(uint32_t center_freq, uint32_t span_hz);
 void subghz_spectrum_stop(void);
+bool subghz_spectrum_get_line(subghz_spectrum_line_t* out_line);
 
 #endif // SUBGHZ_SPECTRUM_H
 
