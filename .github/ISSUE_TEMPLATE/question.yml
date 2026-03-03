@@ -1,0 +1,18 @@
+name: Question
+description: Ask a question about the project, hardware, or documentation.
+labels: ["help wanted"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What do you need help with?
+      placeholder: "e.g., How can I configure the CC1101 GDO0 pin?"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Tell us more about what you are trying to achieve.
+      placeholder: "e.g., I'm trying to add a new protocol to SubGhz..."
